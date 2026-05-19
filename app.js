@@ -46,6 +46,8 @@ const state = {
   visibleHistory: 50,
   netflixDateFormat: "unknown",
   usingImportedData: false,
+  calendarYear: null,
+  calendarMonth: null,
 };
 
 const netflixDateLocale = "pl-PL";
@@ -299,13 +301,20 @@ const inferNetflixType = (title) => {
 };
 
 const parseSeriesInfo = (title) => {
-  const cleanTitle = String(title ?? "").trim();
-  const seasonMatch = cleanTitle.match(/^(.*?):\s*(season|sezon|series|część)\s*(\d+)/i);
+  let cleanTitle = String(title ?? "").trim();
+  if (cleanTitle.startsWith(":")) {
+    cleanTitle = "Nieznany serial" + cleanTitle;
+  }
+  const seasonMatch = cleanTitle.match(/^(.*?):\s*(season|sezon|series|część|czesc)\s*(\d+)/i);
   const episodeMatch = cleanTitle.match(/(?:episode|odcinek)\s*(\d+)/i);
 
   if (seasonMatch) {
+    let series = seasonMatch[1].trim();
+    if (!series) {
+      series = "Nieznany serial";
+    }
     return {
-      series: seasonMatch[1].trim(),
+      series,
       season: Number(seasonMatch[3]),
       episode: episodeMatch ? Number(episodeMatch[1]) : null,
       isSeries: true,
@@ -313,11 +322,25 @@ const parseSeriesInfo = (title) => {
   }
 
   const colonParts = cleanTitle.split(":").map((part) => part.trim()).filter(Boolean);
+  
+  if (colonParts.length === 2) {
+    const secondPartLower = colonParts[1].toLowerCase();
+    const isEpisode = /(?:episode|odcinek|part|część|czesc)/i.test(secondPartLower);
+    if (isEpisode) {
+      return {
+        series: colonParts[0],
+        season: null,
+        episode: episodeMatch ? Number(episodeMatch[1]) : null,
+        isSeries: true,
+      };
+    }
+  }
+
   if (colonParts.length >= 3) {
     return {
       series: colonParts[0],
       season: null,
-      episode: null,
+      episode: episodeMatch ? Number(episodeMatch[1]) : null,
       isSeries: true,
     };
   }
@@ -349,7 +372,10 @@ const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") =>
         return null;
       }
 
-      const cleanTitle = String(title).trim();
+      let cleanTitle = String(title).trim();
+      if (cleanTitle.startsWith(":")) {
+        cleanTitle = "Nieznany serial" + cleanTitle;
+      }
       const seriesInfo = parseSeriesInfo(cleanTitle);
       return {
         title: cleanTitle,
@@ -711,25 +737,113 @@ const getStoryStats = () => {
   };
 };
 
-const getCalendarDays = () => {
-  const groups = getDayGroups();
-  const bounds = getDateBounds(filteredByRange());
+const getIntriguingInsights = () => {
+  const data = filteredByRange();
+  if (!data.length) return [];
 
-  if (!bounds.min || !bounds.max) {
-    return [];
+  const insights = [];
+
+  // 1. Ulubiony dzień tygodnia
+  const daysOfWeek = ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"];
+  const dayMinutes = Array(7).fill(0);
+  data.forEach((item) => {
+    const day = parseDate(item.watchedAt).getDay();
+    dayMinutes[day] += item.minutes;
+  });
+  const maxDayIndex = dayMinutes.indexOf(Math.max(...dayMinutes));
+  const totalMin = dayMinutes.reduce((a, b) => a + b, 0);
+  const favDayPct = totalMin ? Math.round((dayMinutes[maxDayIndex] / totalMin) * 100) : 0;
+  if (totalMin > 0) {
+    insights.push({
+      badge: "📅 ULUBIONY DZIEŃ",
+      title: daysOfWeek[maxDayIndex],
+      detail: `To wtedy spędzasz najwięcej czasu przed ekranem (${favDayPct}% całego czasu).`,
+    });
   }
 
-  const days = [];
-  const start = daysBetween(bounds.min, bounds.max) > 369 ? addDays(bounds.max, -369) : bounds.min;
-  let current = start;
-
-  while (current <= bounds.max) {
-    const group = groups.find((entry) => entry.dateKey === current);
-    days.push(group || { dateKey: current, minutes: 0, count: 0, titles: new Set(), items: [] });
-    current = addDays(current, 1);
+  // 2. Ulubiona pora roku
+  const seasons = {
+    "Zima ❄️": [11, 0, 1], // Grudzień, Styczeń, Luty
+    "Wiosna 🌸": [2, 3, 4], // Marzec, Kwiecień, Maj
+    "Lato ☀️": [5, 6, 7], // Czerwiec, Lipiec, Sierpień
+    "Jesień 🍂": [8, 9, 10], // Wrzesień, Październik, Listopad
+  };
+  const seasonMinutes = { "Zima ❄️": 0, "Wiosna 🌸": 0, "Lato ☀️": 0, "Jesień 🍂": 0 };
+  data.forEach((item) => {
+    const month = parseDate(item.watchedAt).getMonth();
+    for (const [seasonName, months] of Object.entries(seasons)) {
+      if (months.includes(month)) {
+        seasonMinutes[seasonName] += item.minutes;
+        break;
+      }
+    }
+  });
+  let favSeason = "";
+  let maxSeasonMin = 0;
+  for (const [name, min] of Object.entries(seasonMinutes)) {
+    if (min > maxSeasonMin) {
+      maxSeasonMin = min;
+      favSeason = name;
+    }
+  }
+  if (maxSeasonMin > 0) {
+    const seasonPct = totalMin ? Math.round((maxSeasonMin / totalMin) * 100) : 0;
+    insights.push({
+      badge: "🍂 PORA ROKU",
+      title: favSeason,
+      detail: `Pora roku, w której najchętniej oglądasz filmy i seriale (${seasonPct}% czasu).`,
+    });
   }
 
-  return days;
+  // 3. Rekordowy miesiąc w całej historii (globalnie)
+  const monthGroups = new Map();
+  watchHistory.forEach((item) => {
+    const date = parseDate(item.watchedAt);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    monthGroups.set(key, (monthGroups.get(key) || 0) + item.minutes);
+  });
+  let recordMonthKey = "";
+  let maxMonthMin = 0;
+  for (const [key, min] of monthGroups.entries()) {
+    if (min > maxMonthMin) {
+      maxMonthMin = min;
+      recordMonthKey = key;
+    }
+  }
+  if (maxMonthMin > 0) {
+    const [year, month] = recordMonthKey.split("-");
+    const monthName = ["Styczniu", "Lutym", "Marcu", "Kwietniu", "Maju", "Czerwcu", "Lipcu", "Sierpniu", "Wrześniu", "Październiku", "Listopadzie", "Grudniu"][Number(month) - 1];
+    insights.push({
+      badge: "🏆 REKORD HISTORII",
+      title: `${monthName} ${year} r.`,
+      detail: `Wtedy ekran świecił się najdłużej w całej historii: aż ${formatHours(maxMonthMin)}!`,
+    });
+  }
+
+  // 4. Profil widza (odznaka)
+  const stats = getBehaviorStats();
+  let personaTitle = "Zrównoważony Widz ☕";
+  let personaDetail = "Lubisz dobre kino i seriale w rozsądnych ilościach.";
+  if (stats.activeShare > 40) {
+    personaTitle = "Codzienny Maratończyk 🏃‍♂️";
+    personaDetail = "Streaming to Twoja codzienna rutyna. Oglądasz niemal każdego dnia!";
+  } else if (hasReliableTimes() && stats.lateShare > 30) {
+    personaTitle = "Nocny Marek 🦉";
+    personaDetail = "Najlepsze seanse to te po ciemku. Zarywasz noce dla dobrych historii.";
+  } else if (stats.weekendShare > 45) {
+    personaTitle = "Weekendowy Wojownik 🍿";
+    personaDetail = "W tygodniu pracujesz, ale w weekendy nadrabiasz zaległości z nawiązką.";
+  } else if (stats.repeatShare > 25) {
+    personaTitle = "Wierny Nostalgik 🔄";
+    personaDetail = "Często wracasz do ulubionych tytułów. Nowości mogą poczekać.";
+  }
+  insights.push({
+    badge: "🎭 PROFIL WIDZA",
+    title: personaTitle,
+    detail: personaDetail,
+  });
+
+  return insights;
 };
 
 const updateDateInputs = () => {
@@ -796,27 +910,89 @@ const renderPlatformBars = () => {
 };
 
 const renderCalendar = () => {
-  const days = getCalendarDays();
-  const max = Math.max(...days.map((day) => day.minutes), 1);
-  const grid = document.querySelector("#calendarGrid");
-
-  if (!days.length) {
-    grid.innerHTML = `<div class="empty-state">Brak danych w wybranym zakresie.</div>`;
-    return;
+  if (state.calendarYear === null || state.calendarMonth === null) {
+    if (watchHistory.length > 0) {
+      let latestDate = null;
+      watchHistory.forEach(item => {
+        const date = parseDate(item.watchedAt);
+        if (!latestDate || date > latestDate) {
+          latestDate = date;
+        }
+      });
+      if (latestDate) {
+        state.calendarYear = latestDate.getFullYear();
+        state.calendarMonth = latestDate.getMonth();
+      }
+    }
+    if (state.calendarYear === null || state.calendarMonth === null) {
+      const today = new Date();
+      state.calendarYear = today.getFullYear();
+      state.calendarMonth = today.getMonth();
+    }
   }
 
-  grid.innerHTML = days
-    .map((day) => {
-      const heat = Math.round((day.minutes / max) * 82);
-      const date = new Date(day.dateKey);
-      return `
-        <button class="calendar-day" type="button" data-date="${day.dateKey}" style="--heat: ${heat}%">
-          <strong>${date.getDate()}</strong>
-          <span>${day.minutes ? formatCompactTime(day.minutes) : ""}</span>
-        </button>
-      `;
-    })
-    .join("");
+  const Y = state.calendarYear;
+  const M = state.calendarMonth;
+
+  const filteredData = watchHistory
+    .filter((item) => state.platform === "all" || item.platform === state.platform)
+    .filter((item) => {
+      if (!state.query) return true;
+      const query = state.query.trim().toLowerCase();
+      return [item.title, item.platform, item.genre, item.type]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+
+  const daysMap = new Map();
+  filteredData.forEach((item) => {
+    const key = toDateKey(parseDate(item.watchedAt));
+    daysMap.set(key, (daysMap.get(key) || 0) + item.minutes);
+  });
+
+  const maxDailyMinutes = Math.max(...Array.from(daysMap.values()), 1);
+
+  const firstDay = new Date(Y, M, 1);
+  const dayOfWeek = firstDay.getDay(); 
+  const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1; 
+  const numDays = new Date(Y, M + 1, 0).getDate();
+
+  const monthName = [
+    "Styczień", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
+    "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"
+  ][M];
+  document.querySelector("#calendarCurrentMonth").textContent = `${monthName} ${Y}`;
+
+  let gridHtml = "";
+
+  for (let i = 0; i < offset; i++) {
+    gridHtml += `<div class="calendar-day empty"></div>`;
+  }
+
+  let totalMonthMinutes = 0;
+
+  for (let d = 1; d <= numDays; d++) {
+    const dateKey = `${Y}-${String(M + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const minutes = daysMap.get(dateKey) || 0;
+    totalMonthMinutes += minutes;
+
+    const heat = Math.round((minutes / maxDailyMinutes) * 82);
+    const isActive = (state.dateFrom === dateKey && state.dateTo === dateKey);
+    const activeClass = isActive ? " active" : "";
+
+    gridHtml += `
+      <button class="calendar-day${activeClass}" type="button" data-date="${dateKey}" style="--heat: ${heat}%">
+        <strong>${d}</strong>
+        <span>${minutes ? formatCompactTime(minutes) : ""}</span>
+      </button>
+    `;
+  }
+
+  const grid = document.querySelector("#calendarGrid");
+  grid.innerHTML = gridHtml;
+
+  document.querySelector("#calendarMonthHours").textContent = formatHours(totalMonthMinutes);
 };
 
 const renderInsightList = (selector, rows, emptyMessage, renderRow) => {
@@ -945,23 +1121,18 @@ const renderSignals = () => {
     `)
     .join("");
 
-  const ideas = [
-    ["Mapa nastroju", "porównanie gatunków z porą dnia i długością sesji"],
-    ["Detektor cliffhangerów", "seriale, po których następny odcinek odpalano tego samego dnia"],
-    ["Sezonowe obsesje", "miesiące, w których jeden tytuł zdominował całą historię"],
-    ["Koszt subskrypcji za godzinę", "po dodaniu ceny platformy pokażemy realny koszt oglądania"],
-    ["Indeks lojalności", "ile procent czasu zabrała jedna platforma albo jedna seria"],
-    ["Powrót nostalgii", "tytuły wracające po najdłuższych przerwach"],
-  ];
-
-  document.querySelector("#ideaList").innerHTML = ideas
-    .map(([title, detail]) => `
-      <article class="idea-item">
-        <strong>${escapeHtml(title)}</strong>
-        <span>${escapeHtml(detail)}</span>
-      </article>
-    `)
-    .join("");
+  const insights = getIntriguingInsights();
+  document.querySelector("#ideaList").innerHTML = insights.length
+    ? insights
+        .map((item) => `
+          <article class="idea-item">
+            <span class="eyebrow" style="color: var(--teal); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">${escapeHtml(item.badge)}</span>
+            <strong style="display: block; font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px;">${escapeHtml(item.title)}</strong>
+            <span style="display: block; font-size: 13px; color: var(--muted); line-height: 1.4;">${escapeHtml(item.detail)}</span>
+          </article>
+        `)
+        .join("")
+    : `<div class="empty-state">Brak ciekawostek dla wybranego zakresu.</div>`;
 };
 
 const renderStory = () => {
@@ -1146,12 +1317,42 @@ document.querySelector("#calendarGrid").addEventListener("click", (event) => {
     return;
   }
 
-  state.dateFrom = button.dataset.date;
-  state.dateTo = button.dataset.date;
-  state.range = "custom";
+  const clickedDate = button.dataset.date;
+  if (state.dateFrom === clickedDate && state.dateTo === clickedDate) {
+    state.dateFrom = "";
+    state.dateTo = "";
+    state.range = "all";
+  } else {
+    state.dateFrom = clickedDate;
+    state.dateTo = clickedDate;
+    state.range = "custom";
+  }
   state.visibleHistory = historyPageSize;
   renderAll();
-  document.querySelector("#historia").scrollIntoView({ behavior: "smooth", block: "start" });
+  
+  if (state.range === "custom") {
+    document.querySelector("#historia").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
+
+document.querySelector("#calendarPrevMonth").addEventListener("click", () => {
+  if (state.calendarYear === null || state.calendarMonth === null) return;
+  state.calendarMonth -= 1;
+  if (state.calendarMonth < 0) {
+    state.calendarMonth = 11;
+    state.calendarYear -= 1;
+  }
+  renderCalendar();
+});
+
+document.querySelector("#calendarNextMonth").addEventListener("click", () => {
+  if (state.calendarYear === null || state.calendarMonth === null) return;
+  state.calendarMonth += 1;
+  if (state.calendarMonth > 11) {
+    state.calendarMonth = 0;
+    state.calendarYear += 1;
+  }
+  renderCalendar();
 });
 
 document.querySelector(".filter-row").addEventListener("click", (event) => {
@@ -1187,6 +1388,8 @@ const applyNetflixImport = (csvText, options = {}) => {
   state.query = "";
   state.historySort = "date-desc";
   state.visibleHistory = historyPageSize;
+  state.calendarYear = null;
+  state.calendarMonth = null;
   document.querySelector("#historySearch").value = "";
   document.querySelector("#historySort").value = state.historySort;
 
@@ -1255,6 +1458,8 @@ document.querySelector("#clearImportedData").addEventListener("click", () => {
   state.netflixDateFormat = "unknown";
   state.historySort = "date-desc";
   state.visibleHistory = historyPageSize;
+  state.calendarYear = null;
+  state.calendarMonth = null;
   document.querySelector("#historySearch").value = "";
   document.querySelector("#rangeFilter").value = "all";
   document.querySelector("#historySort").value = state.historySort;

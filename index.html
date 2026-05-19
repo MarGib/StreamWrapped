@@ -152,13 +152,30 @@
           </article>
 
           <article class="panel calendar-panel" aria-labelledby="calendarTitle">
-            <div class="panel-heading">
+            <div class="panel-heading calendar-header-row">
               <div>
                 <p class="eyebrow">Kalendarz</p>
                 <h2 id="calendarTitle">Aktywność po dniach</h2>
               </div>
+              <div class="calendar-nav">
+                <button id="calendarPrevMonth" class="nav-btn" type="button" aria-label="Poprzedni miesiąc">&larr;</button>
+                <span id="calendarCurrentMonth" class="calendar-month-label">-</span>
+                <button id="calendarNextMonth" class="nav-btn" type="button" aria-label="Następny miesiąc">&rarr;</button>
+              </div>
+            </div>
+            <div class="calendar-week-headers">
+              <div>Pn</div>
+              <div>Wt</div>
+              <div>Śr</div>
+              <div>Cz</div>
+              <div>Pt</div>
+              <div>So</div>
+              <div>Nd</div>
             </div>
             <div id="calendarGrid" class="calendar-grid" aria-label="Aktywność według dni"></div>
+            <div id="calendarSummary" class="calendar-summary">
+              Oglądano przez <strong id="calendarMonthHours">0 h</strong> w tym miesiącu
+            </div>
           </article>
         </section>
 
@@ -242,8 +259,8 @@
           <article class="panel" aria-labelledby="ideaTitle">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Następne odkrycia</p>
-                <h2 id="ideaTitle">Statystyki warte dodania</h2>
+                <p class="eyebrow">Ciekawostki</p>
+                <h2 id="ideaTitle">Frapujące odkrycia</h2>
               </div>
             </div>
             <div id="ideaList" class="idea-list"></div>

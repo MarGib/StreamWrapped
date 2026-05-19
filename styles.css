@@ -368,9 +368,75 @@ select {
   display: grid;
   grid-template-columns: repeat(7, minmax(34px, 1fr));
   gap: 7px;
-  max-height: 350px;
+  max-height: 380px;
   overflow: auto;
   padding-right: 2px;
+}
+
+.calendar-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-nav .nav-btn {
+  background: #fbfaf7;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: bold;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  user-select: none;
+}
+
+.calendar-nav .nav-btn:hover {
+  background: #ebe8df;
+  border-color: var(--text);
+  transform: scale(1.1);
+}
+
+.calendar-nav .nav-btn:active {
+  transform: scale(0.9);
+}
+
+.calendar-month-label {
+  font-weight: 700;
+  font-size: 14px;
+  min-width: 110px;
+  text-align: center;
+  color: var(--text);
+}
+
+.calendar-week-headers {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(34px, 1fr));
+  gap: 7px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-top: 12px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .calendar-day {
@@ -385,10 +451,24 @@ select {
   color: var(--text);
   cursor: pointer;
   text-align: left;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .calendar-day:hover {
-  border-color: #111827;
+  transform: translateY(-2px);
+  border-color: var(--text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.calendar-day.empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.calendar-day.active {
+  border-color: var(--teal) !important;
+  box-shadow: 0 0 0 2px var(--teal);
+  font-weight: 700;
 }
 
 .calendar-day strong {
@@ -398,7 +478,16 @@ select {
 .calendar-day span {
   min-height: 14px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
+}
+
+.calendar-summary {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
 }
 
 .day-cell {
@@ -1057,8 +1146,9 @@ select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .calendar-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .calendar-grid,
+  .calendar-week-headers {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .share-card {

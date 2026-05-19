@@ -39,6 +39,8 @@ Important limitation: Netflix viewing activity CSV exposes titles and watch date
 
 Netflix CSV entries are treated as date-only records. The UI must not invent a viewing hour for them; exact late-night analysis is only possible for sources that provide timestamps.
 
+The import screen includes a date-format selector. Netflix exports may appear as `MM/DD/YYYY`; for example `05/12/2026` can mean May 12, 2026. Users can switch to `DD/MM/YYYY` when their export is localized differently.
+
 The Netflix analytics view keeps large histories manageable with:
 
 - date filters for a single day or custom range

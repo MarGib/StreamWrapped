@@ -70,6 +70,15 @@
               <span>Szacuj czas oglądania. Netflix CSV podaje datę i tytuł, ale nie podaje godziny ani realnej długości sesji.</span>
             </label>
 
+            <label class="date-format-control">
+              <span>Format dat w CSV</span>
+              <select id="netflixDateFormat" aria-label="Format dat w pliku Netflix CSV">
+                <option value="mdy">Netflix: miesiąc/dzień/rok, np. 05/12/2026 = 12 maja</option>
+                <option value="dmy">Europejski: dzień/miesiąc/rok, np. 12/05/2026 = 12 maja</option>
+                <option value="auto">Auto: zgaduj tylko niejednoznaczne daty</option>
+              </select>
+            </label>
+
             <div id="netflixImportStatus" class="import-status" role="status" aria-live="polite">
               Gotowe na import pliku CSV z Netflixa.
             </div>

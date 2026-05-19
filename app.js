@@ -20,6 +20,7 @@ const sampleHistory = [
 
 let watchHistory = [...sampleHistory];
 let importedNetflixHistory = [];
+let lastNetflixCsvText = "";
 
 const platforms = [
   { name: "Netflix", color: "#e50914", status: "MVP", method: "import eksportu danych konta" },
@@ -43,6 +44,7 @@ const state = {
   dateTo: "",
   historySort: "date-desc",
   visibleHistory: 50,
+  netflixDateFormat: "mdy",
   usingImportedData: false,
 };
 
@@ -178,7 +180,7 @@ const parseCsv = (csvText) => {
   );
 };
 
-const parseNetflixDate = (value) => {
+const parseNetflixDate = (value, format = "mdy") => {
   const raw = String(value ?? "").trim();
 
   if (!raw) {
@@ -199,8 +201,16 @@ const parseNetflixDate = (value) => {
     const second = Number(localizedMatch[2]);
     const yearValue = Number(localizedMatch[3]);
     const year = yearValue < 100 ? 2000 + yearValue : yearValue;
-    const day = first > 12 ? first : second > 12 ? second : first;
-    const month = first > 12 ? second : second > 12 ? first : second;
+    let day = second;
+    let month = first;
+
+    if (format === "dmy") {
+      day = first;
+      month = second;
+    } else if (format === "auto") {
+      day = first > 12 ? first : second;
+      month = first > 12 ? second : first;
+    }
 
     return {
       date: new Date(year, month - 1, day, 12, 0, 0),
@@ -265,13 +275,13 @@ const estimateNetflixMinutes = (title, shouldEstimate) => {
   return inferNetflixType(title) === "Serial" ? 45 : 100;
 };
 
-const normalizeNetflixRows = (rows, shouldEstimate) =>
+const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") =>
   rows
     .map((row) => {
       const title = row.title || row.tytuł || row.tytul || row.titel || row.titre || row.título || Object.values(row)[0];
       const watchedDate =
         row.date || row.data || row.datum || row.fecha || row["watch date"] || row["view date"] || Object.values(row)[1];
-      const parsedDateResult = parseNetflixDate(watchedDate);
+      const parsedDateResult = parseNetflixDate(watchedDate, dateFormat);
 
       if (!title || !parsedDateResult) {
         return null;
@@ -296,11 +306,13 @@ const normalizeNetflixRows = (rows, shouldEstimate) =>
     })
     .filter(Boolean);
 
-const importNetflixCsvText = (csvText, shouldEstimate) => normalizeNetflixRows(parseCsv(csvText), shouldEstimate);
+const importNetflixCsvText = (csvText, shouldEstimate, dateFormat = "mdy") =>
+  normalizeNetflixRows(parseCsv(csvText), shouldEstimate, dateFormat);
 
 const updateImportControls = () => {
   document.querySelector("#downloadLocalSnapshot").disabled = importedNetflixHistory.length === 0;
   document.querySelector("#clearImportedData").disabled = !state.usingImportedData;
+  document.querySelector("#netflixDateFormat").value = state.netflixDateFormat;
   document.querySelector("#dataModePill").lastChild.textContent = state.usingImportedData
     ? " Dane z pliku lokalnego"
     : " Dane przykładowe";
@@ -1084,6 +1096,56 @@ document.querySelector(".filter-row").addEventListener("click", (event) => {
   renderHistory();
 });
 
+const applyNetflixImport = (csvText, options = {}) => {
+  const shouldEstimate = document.querySelector("#estimateNetflixTime").checked;
+  const normalized = importNetflixCsvText(csvText, shouldEstimate, state.netflixDateFormat);
+
+  if (!normalized.length) {
+    setImportStatus("Nie udało się znaleźć kolumn tytułu i daty w tym pliku CSV.", "error");
+    return false;
+  }
+
+  importedNetflixHistory = normalized;
+  watchHistory = importedNetflixHistory;
+  state.usingImportedData = true;
+  state.platform = "all";
+  state.range = "all";
+  state.dateFrom = "";
+  state.dateTo = "";
+  state.query = "";
+  state.historySort = "date-desc";
+  state.visibleHistory = historyPageSize;
+  document.querySelector("#historySearch").value = "";
+  document.querySelector("#historySort").value = state.historySort;
+
+  const estimatedNote = shouldEstimate
+    ? " Czas jest szacowany, bo Netflix nie podaje pełnej długości sesji w tym eksporcie."
+    : " Czas oglądania pozostawiono jako 0, bo szacowanie jest wyłączone.";
+  const formatNote = state.netflixDateFormat === "mdy"
+    ? " Format dat: miesiąc/dzień/rok."
+    : state.netflixDateFormat === "dmy"
+      ? " Format dat: dzień/miesiąc/rok."
+      : " Format dat: auto.";
+  const action = options.reparsed ? "Przeparsowano" : "Zaimportowano";
+  setImportStatus(
+    `${action} ${normalized.length} wpisów z Netflixa.${formatNote} Dane są tylko w pamięci tej karty.${estimatedNote}`,
+    shouldEstimate ? "warning" : "success"
+  );
+  renderAll();
+  return true;
+};
+
+document.querySelector("#netflixDateFormat").addEventListener("change", (event) => {
+  state.netflixDateFormat = event.target.value;
+
+  if (lastNetflixCsvText) {
+    applyNetflixImport(lastNetflixCsvText, { reparsed: true });
+  } else {
+    updateImportControls();
+    setImportStatus("Format dat ustawiony. Wczytaj CSV, żeby zastosować go do historii.");
+  }
+});
+
 document.querySelector("#netflixCsvInput").addEventListener("change", async (event) => {
   const [file] = event.target.files;
   if (!file) {
@@ -1092,35 +1154,8 @@ document.querySelector("#netflixCsvInput").addEventListener("change", async (eve
 
   try {
     const csvText = await file.text();
-    const shouldEstimate = document.querySelector("#estimateNetflixTime").checked;
-    const normalized = importNetflixCsvText(csvText, shouldEstimate);
-
-    if (!normalized.length) {
-      setImportStatus("Nie udało się znaleźć kolumn tytułu i daty w tym pliku CSV.", "error");
-      return;
-    }
-
-    importedNetflixHistory = normalized;
-    watchHistory = importedNetflixHistory;
-    state.usingImportedData = true;
-    state.platform = "all";
-    state.range = "all";
-    state.dateFrom = "";
-    state.dateTo = "";
-    state.query = "";
-    state.historySort = "date-desc";
-    state.visibleHistory = historyPageSize;
-    document.querySelector("#historySearch").value = "";
-    document.querySelector("#historySort").value = state.historySort;
-
-    const estimatedNote = shouldEstimate
-      ? " Czas jest szacowany, bo Netflix nie podaje pełnej długości sesji w tym eksporcie."
-      : " Czas oglądania pozostawiono jako 0, bo szacowanie jest wyłączone.";
-    setImportStatus(
-      `Zaimportowano ${normalized.length} wpisów z Netflixa. Dane są tylko w pamięci tej karty.${estimatedNote}`,
-      shouldEstimate ? "warning" : "success"
-    );
-    renderAll();
+    lastNetflixCsvText = csvText;
+    applyNetflixImport(lastNetflixCsvText);
   } catch (error) {
     setImportStatus(`Import nie powiódł się: ${error.message}`, "error");
   } finally {
@@ -1152,6 +1187,7 @@ document.querySelector("#downloadLocalSnapshot").addEventListener("click", () =>
 
 document.querySelector("#clearImportedData").addEventListener("click", () => {
   importedNetflixHistory = [];
+  lastNetflixCsvText = "";
   watchHistory = [...sampleHistory];
   state.usingImportedData = false;
   state.platform = "all";

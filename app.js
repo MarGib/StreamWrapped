@@ -1404,12 +1404,82 @@ const renderSignals = () => {
     : `<div class="empty-state">Brak ciekawostek dla wybranego zakresu.</div>`;
 };
 
+const getPeakMonthAndShows = (data) => {
+  if (!data || !data.length) return null;
+  const monthGroups = {};
+  data.forEach((item) => {
+    const d = parseDate(item.watchedAt);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!monthGroups[key]) {
+      monthGroups[key] = { minutes: 0, items: [] };
+    }
+    monthGroups[key].minutes += item.minutes;
+    monthGroups[key].items.push(item);
+  });
+
+  let peakKey = null;
+  let maxMin = -1;
+  for (const [key, val] of Object.entries(monthGroups)) {
+    if (val.minutes > maxMin) {
+      maxMin = val.minutes;
+      peakKey = key;
+    }
+  }
+
+  if (!peakKey) return null;
+
+  const monthData = monthGroups[peakKey];
+  const showMinutes = {};
+  monthData.items.forEach((item) => {
+    showMinutes[item.title] = (showMinutes[item.title] || 0) + item.minutes;
+  });
+
+  const topShows = Object.entries(showMinutes)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([title]) => title);
+
+  const [year, month] = peakKey.split("-");
+  const monthNames = [
+    "styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec",
+    "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"
+  ];
+  const monthLabel = `${monthNames[parseInt(month, 10) - 1]} ${year}`;
+
+  return {
+    monthLabel,
+    minutes: maxMin,
+    topShows
+  };
+};
+
+const getFavDayOfWeek = (data) => {
+  if (!data || !data.length) return null;
+  const daysOfWeek = ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"];
+  const dayMinutes = Array(7).fill(0);
+  data.forEach((item) => {
+    const day = parseDate(item.watchedAt).getDay();
+    dayMinutes[day] += item.minutes;
+  });
+
+  const maxDayIndex = dayMinutes.indexOf(Math.max(...dayMinutes));
+  const totalMin = dayMinutes.reduce((a, b) => a + b, 0);
+  const pct = totalMin ? Math.round((dayMinutes[maxDayIndex] / totalMin) * 100) : 0;
+  
+  return {
+    name: daysOfWeek[maxDayIndex],
+    minutes: dayMinutes[maxDayIndex],
+    percentage: pct
+  };
+};
+
 const renderStory = () => {
   const story = getStoryStats();
-  const hasEstimate = filteredByRange().some((item) => item.estimated);
+  const data = filteredByRange();
+  const hasEstimate = data.some((item) => item.estimated);
   const since = story.bounds.min ? formatDateKey(story.bounds.min) : "-";
   const elapsed = story.totalDays ? `${story.totalDays} dni historii, ${story.activeDays} dni aktywnych` : "0 dni historii";
-  const watched = `${formatHours(story.totalMinutes)}${hasEstimate ? "*" : ""}`;
+  const watched = `${formatDetailedTime(story.totalMinutes)}${hasEstimate ? "*" : ""}`;
 
   document.querySelector("#storyPlatform").textContent = story.platformCount === 1 ? story.platform : `Top: ${story.platform}`;
   document.querySelector("#storySince").textContent = story.platformCount === 1
@@ -1429,6 +1499,79 @@ const renderStory = () => {
   document.querySelector("#storyRepeatDetail").textContent = story.repeat
     ? `${story.repeat.items.length} razy, największy odstęp ${story.repeat.longestGap} dni`
     : "Jeszcze nie widać tytułu, do którego wracałeś.";
+
+  // New stats calculation for the three new cards
+  const peakMonth = getPeakMonthAndShows(data);
+  const favDay = getFavDayOfWeek(data);
+  const uniqueTitlesCount = new Set(data.map((item) => item.title)).size;
+
+  // Peak Month Card
+  if (peakMonth) {
+    document.querySelector("#storyPeakMonth").textContent = peakMonth.monthLabel;
+    const hoursText = formatHours(peakMonth.minutes);
+    const topShowsText = peakMonth.topShows.length 
+      ? `Top: ${peakMonth.topShows.join(", ")}` 
+      : "";
+    document.querySelector("#storyPeakMonthDetail").textContent = `${hoursText}. ${topShowsText}`;
+  } else {
+    document.querySelector("#storyPeakMonth").textContent = "-";
+    document.querySelector("#storyPeakMonthDetail").textContent = "-";
+  }
+
+  // Fav Day Card
+  if (favDay) {
+    document.querySelector("#storyFavDay").textContent = favDay.name;
+    document.querySelector("#storyFavDayDetail").textContent = `${favDay.percentage}% czasu oglądania (${formatHours(favDay.minutes)})`;
+  } else {
+    document.querySelector("#storyFavDay").textContent = "-";
+    document.querySelector("#storyFavDayDetail").textContent = "-";
+  }
+
+  // Life or Unique Card
+  const labelEl = document.querySelector("#storyLifeOrUniqueLabel");
+  const titleEl = document.querySelector("#storyLifeOrUniqueTitle");
+  const detailEl = document.querySelector("#storyLifeOrUniqueDetail");
+
+  const birthDateInput = document.querySelector("#birthDateInput");
+  const birthDateValue = birthDateInput.value;
+  let lifePercentageText = null;
+  let lifePercentageDetail = null;
+
+  if (birthDateValue && data.length) {
+    const dates = data.map((item) => parseDate(item.watchedAt)).sort((a, b) => a - b);
+    const lastDate = dates[dates.length - 1];
+    const birthDate = new Date(birthDateValue);
+    const referenceDate = lastDate > new Date() ? lastDate : new Date();
+    const lifespanMs = referenceDate - birthDate;
+    
+    if (lifespanMs > 0) {
+      const totalMinutes = data.reduce((sum, item) => sum + item.minutes, 0);
+      const screenTimeMs = totalMinutes * 60 * 1000;
+      const percentage = (screenTimeMs / lifespanMs) * 100;
+      
+      let formattedPercentage = "";
+      if (percentage >= 1) {
+        formattedPercentage = percentage.toFixed(2) + "%";
+      } else if (percentage > 0) {
+        formattedPercentage = percentage.toFixed(4) + "%";
+      } else {
+        formattedPercentage = "0.00%";
+      }
+      
+      lifePercentageText = formattedPercentage;
+      lifePercentageDetail = "Twojego życia przed ekranem";
+    }
+  }
+
+  if (lifePercentageText) {
+    labelEl.textContent = "Procent życia";
+    titleEl.textContent = lifePercentageText;
+    detailEl.textContent = lifePercentageDetail;
+  } else {
+    labelEl.textContent = "Unikalne produkcje";
+    titleEl.textContent = `${uniqueTitlesCount} pozycji`;
+    detailEl.textContent = "Unikalne tytuły obejrzane w tym okresie";
+  }
 
   const persona = story.repeatShare >= 20
     ? "Profil: kolekcjoner powrotów. Masz swoje tytuły-komfort i wracasz do nich zaskakująco regularnie."

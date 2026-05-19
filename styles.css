@@ -892,9 +892,15 @@ select {
 }
 
 .share-hero h2 {
-  margin: 8px 0;
-  font-size: clamp(52px, 11vw, 112px);
-  line-height: 0.95;
+  margin: 12px 0;
+  font-size: clamp(24px, 4vw, 38px);
+  line-height: 1.35;
+  font-weight: 800;
+  color: white;
+  word-break: break-word;
+  background: linear-gradient(135deg, #ffffff 0%, #a5f3fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .share-stats {

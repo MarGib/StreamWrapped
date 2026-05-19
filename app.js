@@ -1,7 +1,9 @@
 const sampleHistory = [
   { title: "The Crown", type: "Serial", platform: "Netflix", genre: "Dramat", watchedAt: "2026-05-16T20:14:00", minutes: 52 },
+  { title: "The Crown", type: "Serial", platform: "Netflix", genre: "Dramat", watchedAt: "2026-05-15T23:38:00", minutes: 52 },
   { title: "Fallout", type: "Serial", platform: "Prime Video", genre: "Sci-fi", watchedAt: "2026-05-14T21:03:00", minutes: 61 },
   { title: "Diuna: Część druga", type: "Film", platform: "Max", genre: "Sci-fi", watchedAt: "2026-05-12T19:30:00", minutes: 166 },
+  { title: "Diuna: Część druga", type: "Film", platform: "Max", genre: "Sci-fi", watchedAt: "2026-04-12T22:55:00", minutes: 166 },
   { title: "Shogun", type: "Serial", platform: "Disney+", genre: "Historyczny", watchedAt: "2026-05-10T22:10:00", minutes: 58 },
   { title: "Halo", type: "Serial", platform: "SkyShowtime", genre: "Akcja", watchedAt: "2026-05-08T21:44:00", minutes: 49 },
   { title: "Planeta Singli", type: "Film", platform: "Canal+", genre: "Komedia", watchedAt: "2026-04-28T18:18:00", minutes: 136 },
@@ -446,6 +448,162 @@ const getTopSeries = () =>
     .sort((a, b) => b.count - a.count || b.minutes - a.minutes)
     .slice(0, 7);
 
+const getRepeatTitles = () => {
+  const groups = new Map();
+
+  filteredByRange().forEach((item) => {
+    const current = groups.get(item.title) || {
+      title: item.title,
+      platform: item.platform,
+      minutes: 0,
+      dates: [],
+      items: [],
+    };
+    current.minutes += item.minutes;
+    current.dates.push(toDateKey(parseDate(item.watchedAt)));
+    current.items.push(item);
+    groups.set(item.title, current);
+  });
+
+  return [...groups.values()]
+    .map((group) => {
+      const dates = [...new Set(group.dates)].sort();
+      const gaps = dates.slice(1).map((date, index) => daysBetween(dates[index], date));
+      return {
+        ...group,
+        dates,
+        gaps,
+        longestGap: gaps.length ? Math.max(...gaps) : 0,
+        shortestGap: gaps.length ? Math.min(...gaps) : 0,
+      };
+    })
+    .filter((group) => group.items.length > 1 || group.dates.length > 1)
+    .sort((a, b) => b.items.length - a.items.length || b.longestGap - a.longestGap)
+    .slice(0, 7);
+};
+
+const hasReliableTimes = (data = filteredByRange()) => data.some((item) => item.source !== "netflix-csv");
+
+const getLateNightItems = () =>
+  filteredByRange().filter((item) => {
+    if (item.source === "netflix-csv") {
+      return false;
+    }
+
+    const hour = parseDate(item.watchedAt).getHours();
+    return hour >= 23 || hour <= 4;
+  });
+
+const getThresholdMoments = () => {
+  const moments = [];
+  const topDays = getTopDays();
+  const longestDay = topDays[0];
+  const lateItems = getLateNightItems();
+  const biggestLate = lateItems.sort((a, b) => parseDate(b.watchedAt) - parseDate(a.watchedAt))[0];
+  const allDayCandidates = topDays.filter((day) => day.minutes >= 360 || day.count >= 6);
+
+  if (longestDay) {
+    const topTitle = getSeriesGroups(longestDay.items)[0];
+    moments.push({
+      title: "Najcięższy dzień",
+      value: formatDateKey(longestDay.dateKey),
+      detail: `${formatHours(longestDay.minutes)}, ${longestDay.count} wpisów${topTitle ? `, głównie ${topTitle.series}` : ""}`,
+    });
+  }
+
+  if (allDayCandidates.length) {
+    const day = allDayCandidates[0];
+    moments.push({
+      title: "Dzień przesiedziany",
+      value: formatDateKey(day.dateKey),
+      detail: `${formatHours(day.minutes)} i ${day.titles.size} różnych tytułów w jednym dniu`,
+    });
+  }
+
+  if (biggestLate) {
+    moments.push({
+      title: "Zawalona noc",
+      value: biggestLate.title,
+      detail: `${formatDateKey(toDateKey(parseDate(biggestLate.watchedAt)))} po ${parseDate(biggestLate.watchedAt).toLocaleTimeString(netflixDateLocale, { hour: "2-digit", minute: "2-digit" })}`,
+    });
+  } else if (!hasReliableTimes()) {
+    moments.push({
+      title: "Noc ukryta przez Netflixa",
+      value: "brak godzin",
+      detail: "CSV Netflixa nie podaje godzin, więc nocne seanse wykryjemy dopiero z dokładniejszego źródła.",
+    });
+  }
+
+  const repeats = getRepeatTitles();
+  if (repeats[0]) {
+    moments.push({
+      title: "Najmocniejszy powrót",
+      value: repeats[0].title,
+      detail: `${repeats[0].items.length} razy, największy odstęp ${repeats[0].longestGap} dni`,
+    });
+  }
+
+  return moments.slice(0, 7);
+};
+
+const getBehaviorStats = () => {
+  const data = filteredByRange();
+  const dayGroups = getDayGroups(data);
+  const bounds = getDateBounds(data);
+  const activeDays = dayGroups.length;
+  const totalDays = bounds.min && bounds.max ? daysBetween(bounds.min, bounds.max) + 1 : 0;
+  const totalMinutes = data.reduce((sum, item) => sum + item.minutes, 0);
+  const repeatItems = getRepeatTitles().reduce((sum, group) => sum + group.items.length, 0);
+  const weekendMinutes = data.reduce((sum, item) => {
+    const day = parseDate(item.watchedAt).getDay();
+    return day === 0 || day === 6 ? sum + item.minutes : sum;
+  }, 0);
+  const sortedDays = dayGroups.map((day) => day.dateKey).sort();
+  const inactiveGaps = sortedDays.slice(1).map((date, index) => Math.max(daysBetween(sortedDays[index], date) - 1, 0));
+  const maxInactiveGap = inactiveGaps.length ? Math.max(...inactiveGaps) : 0;
+  const lateMinutes = getLateNightItems().reduce((sum, item) => sum + item.minutes, 0);
+  const topSeries = getTopSeries()[0];
+
+  return {
+    bounds,
+    totalDays,
+    activeDays,
+    totalMinutes,
+    avgActiveDay: activeDays ? Math.round(totalMinutes / activeDays) : 0,
+    avgWeek: totalDays ? Math.round(totalMinutes / Math.max(totalDays / 7, 1)) : 0,
+    activeShare: totalDays ? Math.round((activeDays / totalDays) * 100) : 0,
+    weekendShare: totalMinutes ? Math.round((weekendMinutes / totalMinutes) * 100) : 0,
+    repeatShare: data.length ? Math.round((repeatItems / data.length) * 100) : 0,
+    lateShare: totalMinutes ? Math.round((lateMinutes / totalMinutes) * 100) : 0,
+    maxInactiveGap,
+    topSeries,
+  };
+};
+
+const getStoryStats = () => {
+  const data = filteredByRange();
+  const stats = getBehaviorStats();
+  const topSeries = getTopSeries()[0];
+  const topDay = getTopDays()[0];
+  const repeat = getRepeatTitles()[0];
+  const platform = Object.entries(
+    data.reduce((acc, item) => {
+      acc[item.platform] = (acc[item.platform] || 0) + item.minutes;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1])[0]?.[0] || "Streaming";
+  const platformCount = new Set(data.map((item) => item.platform)).size;
+
+  return {
+    ...stats,
+    platform,
+    platformCount,
+    topSeries,
+    topDay,
+    repeat,
+  };
+};
+
 const getCalendarDays = () => {
   const groups = getDayGroups();
   const bounds = getDateBounds(filteredByRange());
@@ -623,6 +781,133 @@ const renderInsights = () => {
   );
 };
 
+const renderSignals = () => {
+  renderInsightList(
+    "#rewatchList",
+    getRepeatTitles(),
+    "Nie wykryto jeszcze tytułów obejrzanych więcej niż raz.",
+    (group) => {
+      const dates = group.dates.map(formatDateKey).join(" → ");
+      const gaps = group.gaps.length ? `Odstępy: ${group.gaps.join(", ")} dni` : "Powtórka tego samego dnia";
+      return `
+        <article class="insight-item">
+          <div>
+            <strong>${escapeHtml(group.title)}</strong>
+            <span>${escapeHtml(dates)}. ${escapeHtml(gaps)}</span>
+          </div>
+          <b>${group.items.length}x</b>
+        </article>
+      `;
+    }
+  );
+
+  renderInsightList(
+    "#thresholdList",
+    getThresholdMoments(),
+    "Brak silnych momentów granicznych w wybranym zakresie.",
+    (moment) => `
+      <article class="insight-item">
+        <div>
+          <strong>${escapeHtml(moment.title)}</strong>
+          <span>${escapeHtml(moment.detail)}</span>
+        </div>
+        <b>${escapeHtml(moment.value)}</b>
+      </article>
+    `
+  );
+
+  const stats = getBehaviorStats();
+  const signals = [
+    { label: "Dni aktywne", value: `${stats.activeShare}%`, width: stats.activeShare, detail: `${stats.activeDays} z ${stats.totalDays || 0} dni` },
+    { label: "Weekendowy ciężar", value: `${stats.weekendShare}%`, width: stats.weekendShare, detail: "udział czasu z sobót i niedziel" },
+    { label: "Powroty do tytułów", value: `${stats.repeatShare}%`, width: stats.repeatShare, detail: "wpisów należących do powtórek" },
+    { label: "Nocny ślad", value: hasReliableTimes() ? `${stats.lateShare}%` : "ukryty", width: hasReliableTimes() ? stats.lateShare : 0, detail: hasReliableTimes() ? "po 23:00 albo przed 5:00" : "Netflix CSV nie zawiera godzin" },
+    { label: "Najdłuższa przerwa", value: `${stats.maxInactiveGap} dni`, width: Math.min(stats.maxInactiveGap * 3, 100), detail: "bez żadnego wpisu w historii" },
+  ];
+
+  document.querySelector("#behaviorList").innerHTML = signals
+    .map((signal) => `
+      <div class="signal-item">
+        <div>
+          <strong>${escapeHtml(signal.label)}</strong>
+          <span>${escapeHtml(signal.detail)}</span>
+        </div>
+        <b>${escapeHtml(signal.value)}</b>
+        <div class="signal-track"><span style="width: ${Math.max(signal.width, 4)}%"></span></div>
+      </div>
+    `)
+    .join("");
+
+  const ideas = [
+    ["Mapa nastroju", "porównanie gatunków z porą dnia i długością sesji"],
+    ["Detektor cliffhangerów", "seriale, po których następny odcinek odpalano tego samego dnia"],
+    ["Sezonowe obsesje", "miesiące, w których jeden tytuł zdominował całą historię"],
+    ["Koszt subskrypcji za godzinę", "po dodaniu ceny platformy pokażemy realny koszt oglądania"],
+    ["Indeks lojalności", "ile procent czasu zabrała jedna platforma albo jedna seria"],
+    ["Powrót nostalgii", "tytuły wracające po najdłuższych przerwach"],
+  ];
+
+  document.querySelector("#ideaList").innerHTML = ideas
+    .map(([title, detail]) => `
+      <article class="idea-item">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(detail)}</span>
+      </article>
+    `)
+    .join("");
+};
+
+const renderStory = () => {
+  const story = getStoryStats();
+  const hasEstimate = filteredByRange().some((item) => item.estimated);
+  const since = story.bounds.min ? formatDateKey(story.bounds.min) : "-";
+  const elapsed = story.totalDays ? `${story.totalDays} dni historii, ${story.activeDays} dni aktywnych` : "0 dni historii";
+  const watched = `${formatHours(story.totalMinutes)}${hasEstimate ? "*" : ""}`;
+
+  document.querySelector("#storyPlatform").textContent = story.platformCount === 1 ? story.platform : `Top: ${story.platform}`;
+  document.querySelector("#storySince").textContent = story.platformCount === 1
+    ? `Jesteś użytkownikiem ${story.platform} od ${since}`
+    : `Twoja historia oglądania zaczyna się ${since}`;
+  document.querySelector("#storyWatched").textContent = watched;
+  document.querySelector("#storyElapsed").textContent = elapsed;
+  document.querySelector("#storyHookTitle").textContent = story.topSeries?.series || "-";
+  document.querySelector("#storyHookDetail").textContent = story.topSeries
+    ? `${story.topSeries.count} wpisów, ${formatHours(story.topSeries.minutes)}`
+    : "-";
+  document.querySelector("#storyBingeDay").textContent = story.topDay ? formatDateKey(story.topDay.dateKey) : "-";
+  document.querySelector("#storyBingeDetail").textContent = story.topDay
+    ? `${formatHours(story.topDay.minutes)}, ${story.topDay.count} wpisów`
+    : "-";
+  document.querySelector("#storyRepeat").textContent = story.repeat?.title || "brak powtórek";
+  document.querySelector("#storyRepeatDetail").textContent = story.repeat
+    ? `${story.repeat.items.length} razy, największy odstęp ${story.repeat.longestGap} dni`
+    : "Jeszcze nie widać tytułu, do którego wracałeś.";
+
+  const persona = story.repeatShare >= 20
+    ? "Profil: kolekcjoner powrotów. Masz swoje tytuły-komfort i wracasz do nich zaskakująco regularnie."
+    : story.weekendShare >= 55
+      ? "Profil: weekendowy maratończyk. Twoje oglądanie kumuluje się wtedy, gdy tydzień wreszcie puszcza."
+      : story.activeShare >= 45
+        ? "Profil: rytualny widz. Streaming nie jest epizodem, tylko stałym elementem tygodnia."
+        : "Profil: selektywny widz. Włączasz rzadziej, ale zostawiasz po sobie wyraźne piki aktywności.";
+  document.querySelector("#storyPersona").textContent = persona;
+
+  const bars = [
+    ["Aktywne dni", story.activeShare],
+    ["Weekend", story.weekendShare],
+    ["Powtórki", story.repeatShare],
+  ];
+  document.querySelector("#storyMiniBars").innerHTML = bars
+    .map(([label, value]) => `
+      <div class="story-bar">
+        <span>${escapeHtml(label)}</span>
+        <div><b style="width: ${Math.max(value, 4)}%"></b></div>
+        <strong>${value}%</strong>
+      </div>
+    `)
+    .join("");
+};
+
 const renderFilters = () => {
   const filterRow = document.querySelector(".filter-row");
   const available = ["all", ...new Set(watchHistory.map((item) => item.platform))];
@@ -691,6 +976,8 @@ const renderAll = () => {
   renderPlatformBars();
   renderCalendar();
   renderInsights();
+  renderSignals();
+  renderStory();
   renderFilters();
   renderHistory();
   renderCoverage();

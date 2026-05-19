@@ -651,6 +651,185 @@ select {
   display: none;
 }
 
+.signal-grid,
+.idea-list {
+  display: grid;
+  gap: 10px;
+}
+
+.signal-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.signal-item strong,
+.signal-item span,
+.idea-item strong,
+.idea-item span {
+  display: block;
+}
+
+.signal-item span,
+.idea-item span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.signal-item b {
+  font-size: 13px;
+}
+
+.signal-track {
+  grid-column: 1 / -1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ebe8df;
+}
+
+.signal-track span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal), var(--blue));
+}
+
+.idea-item {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.share-section {
+  margin-bottom: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.share-heading {
+  align-items: center;
+}
+
+.share-card {
+  min-height: 640px;
+  display: grid;
+  align-content: space-between;
+  gap: 22px;
+  padding: clamp(22px, 5vw, 48px);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(229, 9, 20, 0.22), transparent 28%),
+    linear-gradient(135deg, #111827 0%, #141414 58%, #073b3a 100%);
+  color: white;
+}
+
+.share-topline,
+.share-stats,
+.story-bar {
+  display: grid;
+  gap: 10px;
+}
+
+.share-topline {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  color: #d1d5db;
+  font-weight: 800;
+}
+
+.share-topline b {
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  color: white;
+}
+
+.share-hero p,
+.share-hero span,
+.share-stats span,
+.share-stats p,
+.story-persona,
+.story-bar span,
+.story-bar strong {
+  color: #cbd5e1;
+}
+
+.share-hero p,
+.share-hero span,
+.share-stats p,
+.story-persona {
+  margin: 0;
+}
+
+.share-hero h2 {
+  margin: 8px 0;
+  font-size: clamp(52px, 11vw, 112px);
+  line-height: 0.95;
+}
+
+.share-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.share-stats div {
+  min-height: 134px;
+  display: grid;
+  align-content: space-between;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.share-stats strong {
+  display: block;
+  margin: 8px 0;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.story-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.story-bar {
+  grid-template-columns: 110px minmax(0, 1fr) 48px;
+  align-items: center;
+}
+
+.story-bar div {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.story-bar b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2dd4bf;
+}
+
+.story-persona {
+  max-width: 780px;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
 .netflix-import {
   display: grid;
   gap: 12px;
@@ -799,6 +978,7 @@ select {
   .topbar,
   .panel-heading,
   .controls-heading,
+  .share-heading,
   .history-heading {
     flex-direction: column;
     align-items: stretch;
@@ -838,6 +1018,15 @@ select {
 
   .calendar-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .share-card {
+    min-height: 760px;
+  }
+
+  .share-stats,
+  .story-bar {
+    grid-template-columns: 1fr;
   }
 
   .history-item {

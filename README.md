@@ -44,6 +44,9 @@ The Netflix analytics view keeps large histories manageable with:
 - longest viewing days
 - likely binge sessions based on repeated series entries in a day or across consecutive days
 - likely abandoned series based on older unfinished-looking series activity
+- repeat watches with dates and gaps between sessions
+- threshold moments such as heavy days, late-night sessions when time data exists, and long inactive gaps
+- a one-screen social/share infographic generated from the current statistics
 - capped history rendering with sorting and "load more"
 
 ## Initial Platform Targets

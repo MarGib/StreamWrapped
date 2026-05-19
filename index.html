@@ -20,6 +20,8 @@
         <nav class="nav-list" aria-label="Sekcje">
           <a href="#raport" class="active">Raport</a>
           <a href="#analizy">Analizy</a>
+          <a href="#sygnaly">Sygnały</a>
+          <a href="#infografika">Infografika</a>
           <a href="#historia">Historia</a>
           <a href="#platformy">Platformy</a>
           <a href="#import">Import</a>
@@ -163,6 +165,90 @@
           </article>
         </section>
 
+        <section id="sygnaly" class="content-grid insights-grid">
+          <article class="panel" aria-labelledby="rewatchTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Powroty</p>
+                <h2 id="rewatchTitle">Tytuły oglądane kilka razy</h2>
+              </div>
+            </div>
+            <div id="rewatchList" class="insight-list"></div>
+          </article>
+
+          <article class="panel" aria-labelledby="thresholdTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Granice</p>
+                <h2 id="thresholdTitle">Dni, które wymknęły się spod kontroli</h2>
+              </div>
+            </div>
+            <div id="thresholdList" class="insight-list"></div>
+          </article>
+        </section>
+
+        <section class="content-grid insights-grid">
+          <article class="panel" aria-labelledby="behaviorTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Profil</p>
+                <h2 id="behaviorTitle">Twój streamingowy rytm</h2>
+              </div>
+            </div>
+            <div id="behaviorList" class="signal-grid"></div>
+          </article>
+
+          <article class="panel" aria-labelledby="ideaTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Następne odkrycia</p>
+                <h2 id="ideaTitle">Statystyki warte dodania</h2>
+              </div>
+            </div>
+            <div id="ideaList" class="idea-list"></div>
+          </article>
+        </section>
+
+        <section id="infografika" class="share-section" aria-labelledby="shareTitle">
+          <div class="panel-heading share-heading">
+            <div>
+              <p class="eyebrow">Do udostępnienia</p>
+              <h2 id="shareTitle">Jednoekranowa infografika</h2>
+            </div>
+            <a class="secondary-button" href="#infografika">Widok do zrzutu ekranu</a>
+          </div>
+          <article class="share-card">
+            <div class="share-topline">
+              <span>StreamWrapped</span>
+              <b id="storyPlatform">Netflix</b>
+            </div>
+            <div class="share-hero">
+              <p id="storySince">Jesteś użytkownikiem od -</p>
+              <h2 id="storyWatched">0 h</h2>
+              <span id="storyElapsed">0 dni historii</span>
+            </div>
+            <div class="share-stats">
+              <div>
+                <span>Najbardziej wciągnęło</span>
+                <strong id="storyHookTitle">-</strong>
+                <p id="storyHookDetail">-</p>
+              </div>
+              <div>
+                <span>Dzień maratonu</span>
+                <strong id="storyBingeDay">-</strong>
+                <p id="storyBingeDetail">-</p>
+              </div>
+              <div>
+                <span>Powrót po czasie</span>
+                <strong id="storyRepeat">-</strong>
+                <p id="storyRepeatDetail">-</p>
+              </div>
+            </div>
+            <div id="storyMiniBars" class="story-bars"></div>
+            <p id="storyPersona" class="story-persona">Twój profil widza pojawi się po imporcie historii.</p>
+          </article>
+        </section>
+
         <section id="historia" class="panel history-panel" aria-labelledby="historyTitle">
           <div class="panel-heading history-heading">
             <div>
@@ -267,6 +353,6 @@
       </main>
     </div>
 
-    <script src="app.js?v=netflix-analytics"></script>
+    <script src="app.js?v=story-dashboard"></script>
   </body>
 </html>

@@ -78,6 +78,16 @@ const formatCompactTime = (minutes) => {
 
 const parseDate = (value) => new Date(value);
 
+const formatLocalISO = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+};
+
 const toDateKey = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -86,8 +96,14 @@ const toDateKey = (date) => {
 };
 
 const formatDateKey = (dateKey) => {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString(netflixDateLocale, {
+  if (!dateKey) return "";
+  const parts = dateKey.split("-");
+  if (parts.length !== 3) return dateKey;
+  const [year, month, day] = parts.map(Number);
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return dateKey;
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return dateKey;
+  return date.toLocaleDateString(netflixDateLocale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -184,8 +200,8 @@ const getNetflixRowDateValue = (row) =>
   row.date || row.data || row.datum || row.fecha || row["watch date"] || row["view date"] || Object.values(row)[1] || "";
 
 const inferNetflixDateFormat = (rows) => {
-  let monthFirstScore = 0;
-  let dayFirstScore = 0;
+  let hasDayFirst = false;
+  let hasMonthFirst = false;
 
   rows.forEach((row) => {
     const raw = String(getNetflixRowDateValue(row)).trim();
@@ -198,16 +214,21 @@ const inferNetflixDateFormat = (rows) => {
     const first = Number(match[1]);
     const second = Number(match[2]);
 
-    if (second > 12 && first <= 12) {
-      monthFirstScore += 3;
-    } else if (first > 12 && second <= 12) {
-      dayFirstScore += 3;
-    } else {
-      monthFirstScore += 1;
+    if (first > 12 && second <= 12) {
+      hasDayFirst = true;
+    } else if (second > 12 && first <= 12) {
+      hasMonthFirst = true;
     }
   });
 
-  return dayFirstScore > monthFirstScore ? "dmy" : "mdy";
+  if (hasDayFirst && !hasMonthFirst) {
+    return "dmy";
+  }
+  if (hasMonthFirst && !hasDayFirst) {
+    return "mdy";
+  }
+
+  return "dmy";
 };
 
 const getDateFormatLabel = (format) => {
@@ -335,7 +356,7 @@ const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") =>
         type: inferNetflixType(cleanTitle),
         platform: "Netflix",
         genre: shouldEstimate ? "Import Netflix, czas szacowany" : "Import Netflix, czas nieznany",
-        watchedAt: parsedDateResult.date.toISOString(),
+        watchedAt: formatLocalISO(parsedDateResult.date),
         hasTime: parsedDateResult.hasTime,
         minutes: estimateNetflixMinutes(cleanTitle, shouldEstimate),
         estimated: shouldEstimate,
@@ -1164,7 +1185,6 @@ const applyNetflixImport = (csvText, options = {}) => {
   state.dateFrom = "";
   state.dateTo = "";
   state.query = "";
-  state.netflixDateFormat = "unknown";
   state.historySort = "date-desc";
   state.visibleHistory = historyPageSize;
   document.querySelector("#historySearch").value = "";
@@ -1232,6 +1252,7 @@ document.querySelector("#clearImportedData").addEventListener("click", () => {
   state.dateFrom = "";
   state.dateTo = "";
   state.query = "";
+  state.netflixDateFormat = "unknown";
   state.historySort = "date-desc";
   state.visibleHistory = historyPageSize;
   document.querySelector("#historySearch").value = "";

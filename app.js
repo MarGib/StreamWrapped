@@ -1,4 +1,4 @@
-const watchHistory = [
+const sampleHistory = [
   { title: "The Crown", type: "Serial", platform: "Netflix", genre: "Dramat", watchedAt: "2026-05-16T20:14:00", minutes: 52 },
   { title: "Fallout", type: "Serial", platform: "Prime Video", genre: "Sci-fi", watchedAt: "2026-05-14T21:03:00", minutes: 61 },
   { title: "Diuna: Część druga", type: "Film", platform: "Max", genre: "Sci-fi", watchedAt: "2026-05-12T19:30:00", minutes: 166 },
@@ -15,6 +15,9 @@ const watchHistory = [
   { title: "Top Gear", type: "Program", platform: "Player", genre: "Motoryzacja", watchedAt: "2026-01-12T18:05:00", minutes: 44 },
   { title: "Liga Mistrzów", type: "Sport", platform: "Canal+", genre: "Sport", watchedAt: "2025-12-10T20:55:00", minutes: 112 },
 ];
+
+let watchHistory = [...sampleHistory];
+let importedNetflixHistory = [];
 
 const platforms = [
   { name: "Netflix", color: "#e50914", status: "MVP", method: "import eksportu danych konta" },
@@ -34,7 +37,18 @@ const state = {
   query: "",
   platform: "all",
   range: "all",
+  usingImportedData: false,
 };
+
+const netflixDateLocale = "pl-PL";
+
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 
 const formatHours = (minutes) => {
   const hours = Math.floor(minutes / 60);
@@ -54,6 +68,134 @@ const formatCompactTime = (minutes) => {
 };
 
 const parseDate = (value) => new Date(value);
+
+const setImportStatus = (message, tone = "success") => {
+  const status = document.querySelector("#netflixImportStatus");
+  status.textContent = message;
+  status.classList.toggle("warning", tone === "warning");
+  status.classList.toggle("error", tone === "error");
+};
+
+const splitCsvLine = (line) => {
+  const cells = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      cell += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      cells.push(cell.trim());
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  cells.push(cell.trim());
+  return cells;
+};
+
+const parseCsv = (csvText) => {
+  const rows = csvText
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map(splitCsvLine);
+
+  if (rows.length < 2) {
+    return [];
+  }
+
+  const headers = rows[0].map((header) => header.toLowerCase().trim());
+  return rows.slice(1).map((row) =>
+    Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""]))
+  );
+};
+
+const parseNetflixDate = (value) => {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const isoMatch = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (isoMatch) {
+    return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]), 20, 0, 0);
+  }
+
+  const localizedMatch = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+  if (localizedMatch) {
+    const first = Number(localizedMatch[1]);
+    const second = Number(localizedMatch[2]);
+    const yearValue = Number(localizedMatch[3]);
+    const year = yearValue < 100 ? 2000 + yearValue : yearValue;
+    const day = first > 12 ? first : second > 12 ? second : first;
+    const month = first > 12 ? second : second > 12 ? first : second;
+
+    return new Date(year, month - 1, day, 20, 0, 0);
+  }
+
+  const fallback = new Date(raw);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+};
+
+const inferNetflixType = (title) => {
+  const normalized = title.toLowerCase();
+  const serialSignals = [": season ", ": sezon ", ": limited series", ": miniserial", " odcinek ", " episode "];
+  return serialSignals.some((signal) => normalized.includes(signal)) ? "Serial" : "Film / odcinek";
+};
+
+const estimateNetflixMinutes = (title, shouldEstimate) => {
+  if (!shouldEstimate) {
+    return 0;
+  }
+
+  return inferNetflixType(title) === "Serial" ? 45 : 100;
+};
+
+const normalizeNetflixRows = (rows, shouldEstimate) =>
+  rows
+    .map((row) => {
+      const title = row.title || row.tytuł || row.tytul || row.titel || row.titre || row.título || Object.values(row)[0];
+      const watchedDate =
+        row.date || row.data || row.datum || row.fecha || row["watch date"] || row["view date"] || Object.values(row)[1];
+      const parsedDate = parseNetflixDate(watchedDate);
+
+      if (!title || !parsedDate) {
+        return null;
+      }
+
+      const cleanTitle = String(title).trim();
+      return {
+        title: cleanTitle,
+        type: inferNetflixType(cleanTitle),
+        platform: "Netflix",
+        genre: shouldEstimate ? "Import Netflix, czas szacowany" : "Import Netflix, czas nieznany",
+        watchedAt: parsedDate.toISOString(),
+        minutes: estimateNetflixMinutes(cleanTitle, shouldEstimate),
+        estimated: shouldEstimate,
+        source: "netflix-csv",
+      };
+    })
+    .filter(Boolean);
+
+const importNetflixCsvText = (csvText, shouldEstimate) => normalizeNetflixRows(parseCsv(csvText), shouldEstimate);
+
+const updateImportControls = () => {
+  document.querySelector("#downloadLocalSnapshot").disabled = importedNetflixHistory.length === 0;
+  document.querySelector("#clearImportedData").disabled = !state.usingImportedData;
+  document.querySelector("#dataModePill").lastChild.textContent = state.usingImportedData
+    ? " Dane z pliku lokalnego"
+    : " Dane przykładowe";
+};
 
 const filteredByRange = () => {
   if (state.range === "all") {
@@ -97,12 +239,13 @@ const renderMetrics = () => {
   }, {});
   const peakTime = Object.entries(hours).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
 
-  document.querySelector("#totalHours").textContent = formatHours(totalMinutes);
+  const hasEstimatedTime = data.some((item) => item.estimated);
+  document.querySelector("#totalHours").textContent = `${formatHours(totalMinutes)}${hasEstimatedTime ? "*" : ""}`;
   document.querySelector("#sessionCount").textContent = data.length.toString();
   document.querySelector("#peakTime").textContent = peakTime;
   document.querySelector("#uniqueTitles").textContent = uniqueTitles.toString();
   document.querySelector("#watchSpan").textContent = dates.length
-    ? `${dates[0].toLocaleDateString("pl-PL")} - ${dates[dates.length - 1].toLocaleDateString("pl-PL")}`
+    ? `${dates[0].toLocaleDateString(netflixDateLocale)} - ${dates[dates.length - 1].toLocaleDateString(netflixDateLocale)}`
     : "Brak danych";
 };
 
@@ -119,7 +262,7 @@ const renderPlatformBars = () => {
       const width = Math.max((minutes / max) * 100, 5);
       return `
         <div class="bar-row">
-          <div class="bar-label">${platform}</div>
+          <div class="bar-label">${escapeHtml(platform)}</div>
           <div class="bar-track" aria-hidden="true">
             <div class="bar-fill" style="--bar-color: ${platformColors[platform] || "#667085"}; width: ${width}%"></div>
           </div>
@@ -144,7 +287,7 @@ const renderHeatmap = () => {
       const heat = Math.round((minutes / max) * 72);
       return `
         <div class="day-cell" style="--heat-color: #0e9384; --heat: ${heat}%">
-          <strong>${name}</strong>
+          <strong>${escapeHtml(name)}</strong>
           <span>${minutes ? formatCompactTime(minutes) : "0m"}</span>
         </div>
       `;
@@ -160,7 +303,7 @@ const renderFilters = () => {
     .map((platform) => {
       const label = platform === "all" ? "Wszystkie" : platform;
       const active = state.platform === platform ? " active" : "";
-      return `<button class="filter-chip${active}" data-platform="${platform}" type="button">${label}</button>`;
+      return `<button class="filter-chip${active}" data-platform="${escapeHtml(platform)}" type="button">${escapeHtml(label)}</button>`;
     })
     .join("");
 };
@@ -180,12 +323,12 @@ const renderHistory = () => {
       return `
         <article class="history-item">
           <div class="title-stack">
-            <strong>${item.title}</strong>
-            <span>${item.type} • ${item.genre}</span>
+            <strong>${escapeHtml(item.title)}</strong>
+            <span>${escapeHtml(item.type)} • ${escapeHtml(item.genre)}</span>
           </div>
-          <div class="platform-badge" style="--badge-bg: ${platformColors[item.platform] || "#667085"}">${item.platform}</div>
-          <div class="history-meta">${date.toLocaleDateString("pl-PL")} ${date.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}</div>
-          <div class="history-meta">${formatHours(item.minutes)}</div>
+          <div class="platform-badge" style="--badge-bg: ${platformColors[item.platform] || "#667085"}">${escapeHtml(item.platform)}</div>
+          <div class="history-meta">${date.toLocaleDateString(netflixDateLocale)} ${date.toLocaleTimeString(netflixDateLocale, { hour: "2-digit", minute: "2-digit" })}</div>
+          <div class="history-meta">${formatHours(item.minutes)}${item.estimated ? "*" : ""}</div>
         </article>
       `;
     })
@@ -199,10 +342,10 @@ const renderCoverage = () => {
       return `
         <div class="coverage-item">
           <div>
-            <strong>${platform.name}</strong>
-            <span>${platform.method}</span>
+            <strong>${escapeHtml(platform.name)}</strong>
+            <span>${escapeHtml(platform.method)}</span>
           </div>
-          <span class="coverage-status ${statusClass}">${platform.status}</span>
+          <span class="coverage-status ${statusClass}">${escapeHtml(platform.status)}</span>
         </div>
       `;
     })
@@ -216,6 +359,7 @@ const renderAll = () => {
   renderFilters();
   renderHistory();
   renderCoverage();
+  updateImportControls();
 };
 
 document.querySelector("#historySearch").addEventListener("input", (event) => {
@@ -239,4 +383,82 @@ document.querySelector(".filter-row").addEventListener("click", (event) => {
   renderHistory();
 });
 
+document.querySelector("#netflixCsvInput").addEventListener("change", async (event) => {
+  const [file] = event.target.files;
+  if (!file) {
+    return;
+  }
+
+  try {
+    const csvText = await file.text();
+    const shouldEstimate = document.querySelector("#estimateNetflixTime").checked;
+    const normalized = importNetflixCsvText(csvText, shouldEstimate);
+
+    if (!normalized.length) {
+      setImportStatus("Nie udało się znaleźć kolumn tytułu i daty w tym pliku CSV.", "error");
+      return;
+    }
+
+    importedNetflixHistory = normalized;
+    watchHistory = importedNetflixHistory;
+    state.usingImportedData = true;
+    state.platform = "all";
+    state.range = "all";
+    state.query = "";
+    document.querySelector("#historySearch").value = "";
+
+    const estimatedNote = shouldEstimate
+      ? " Czas jest szacowany, bo Netflix nie podaje pełnej długości sesji w tym eksporcie."
+      : " Czas oglądania pozostawiono jako 0, bo szacowanie jest wyłączone.";
+    setImportStatus(
+      `Zaimportowano ${normalized.length} wpisów z Netflixa. Dane są tylko w pamięci tej karty.${estimatedNote}`,
+      shouldEstimate ? "warning" : "success"
+    );
+    renderAll();
+  } catch (error) {
+    setImportStatus(`Import nie powiódł się: ${error.message}`, "error");
+  } finally {
+    event.target.value = "";
+  }
+});
+
+document.querySelector("#downloadLocalSnapshot").addEventListener("click", () => {
+  if (!importedNetflixHistory.length) {
+    return;
+  }
+
+  const snapshot = {
+    source: "StreamWrapped",
+    generatedAt: new Date().toISOString(),
+    storage: "local-download-only",
+    items: importedNetflixHistory,
+  };
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `streamwrapped-netflix-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+});
+
+document.querySelector("#clearImportedData").addEventListener("click", () => {
+  importedNetflixHistory = [];
+  watchHistory = [...sampleHistory];
+  state.usingImportedData = false;
+  state.platform = "all";
+  state.range = "all";
+  state.query = "";
+  document.querySelector("#historySearch").value = "";
+  document.querySelector("#rangeFilter").value = "all";
+  setImportStatus("Dane z importu zostały wyczyszczone z pamięci karty. Wróciły dane przykładowe.");
+  renderAll();
+});
+
 renderAll();
+
+window.StreamWrapped = Object.freeze({
+  importNetflixCsvText,
+});

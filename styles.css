@@ -35,6 +35,12 @@ select {
   font: inherit;
 }
 
+button,
+a,
+label {
+  -webkit-tap-highlight-color: transparent;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -493,6 +499,124 @@ select {
   background: #fbfaf7;
 }
 
+.netflix-import {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.connector-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.connector-card strong,
+.connector-card p {
+  display: block;
+}
+
+.connector-card p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.text-button,
+.file-button,
+.secondary-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid #111827;
+  border-radius: 8px;
+  background: #111827;
+  color: white;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.file-button input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.secondary-button {
+  border-color: var(--line);
+  background: #fbfaf7;
+  color: var(--text);
+}
+
+.secondary-button.danger {
+  color: var(--red);
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.checkbox-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.checkbox-row input {
+  margin-top: 2px;
+}
+
+.import-status {
+  padding: 12px;
+  border: 1px solid #b7e4d7;
+  border-radius: 8px;
+  background: #eefaf6;
+  color: #075e4d;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.import-status.warning {
+  border-color: #fedf89;
+  background: #fffbeb;
+  color: #93370d;
+}
+
+.import-status.error {
+  border-color: #fecdca;
+  background: #fff1f3;
+  color: #b42318;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.divider {
+  height: 1px;
+  margin: 2px 0 18px;
+  background: var(--line);
+}
+
 @media (max-width: 1020px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -546,5 +670,15 @@ select {
 
   .history-item {
     grid-template-columns: 1fr;
+  }
+
+  .connector-card {
+    grid-template-columns: 1fr;
+  }
+
+  .text-button,
+  .file-button,
+  .secondary-button {
+    width: 100%;
   }
 }

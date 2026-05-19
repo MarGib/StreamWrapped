@@ -36,7 +36,7 @@
             <p class="eyebrow">MVP produktu</p>
             <h1>Jeden raport dla całej historii oglądania</h1>
           </div>
-          <div class="account-pill" aria-label="Tryb demonstracyjny">
+          <div id="dataModePill" class="account-pill" aria-label="Tryb danych">
             <span class="status-dot"></span>
             Dane przykładowe
           </div>
@@ -123,10 +123,47 @@
           <article id="import" class="panel import-panel" aria-labelledby="importTitle">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Dane</p>
-                <h2 id="importTitle">Bezpieczny import</h2>
+                <p class="eyebrow">Netflix</p>
+                <h2 id="importTitle">Import bez przechowywania</h2>
               </div>
             </div>
+            <div class="netflix-import">
+              <div class="connector-card">
+                <div>
+                  <strong>1. Pobierz historię z Netflixa</strong>
+                  <p>Otwórz aktywność profilu w Netflixie i wybierz opcję pobrania całej listy jako CSV.</p>
+                </div>
+                <a class="text-button" href="https://www.netflix.com/viewingactivity" target="_blank" rel="noreferrer">Otwórz Netflix</a>
+              </div>
+
+              <div class="connector-card">
+                <div>
+                  <strong>2. Wczytaj plik lokalnie</strong>
+                  <p>Plik zostaje w tej karcie przeglądarki. Aplikacja nie wysyła go na serwer i nie zapisuje automatycznie.</p>
+                </div>
+                <label class="file-button">
+                  Wybierz CSV
+                  <input id="netflixCsvInput" type="file" accept=".csv,text/csv">
+                </label>
+              </div>
+
+              <label class="checkbox-row">
+                <input id="estimateNetflixTime" type="checkbox" checked>
+                <span>Szacuj czas oglądania, bo Netflix CSV podaje historię tytułów i daty, ale nie pełny czas sesji.</span>
+              </label>
+
+              <div id="netflixImportStatus" class="import-status" role="status" aria-live="polite">
+                Gotowe na import pliku CSV z Netflixa.
+              </div>
+
+              <div class="button-row">
+                <button id="downloadLocalSnapshot" class="secondary-button" type="button" disabled>Pobierz lokalny JSON</button>
+                <button id="clearImportedData" class="secondary-button danger" type="button" disabled>Wyczyść z pamięci</button>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
             <ol class="import-steps">
               <li>
                 <strong>Połącz lub zaimportuj</strong>
@@ -146,6 +183,6 @@
       </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=netflix-connector"></script>
   </body>
 </html>

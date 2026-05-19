@@ -21,6 +21,22 @@ The safest long-term approach is to support every platform through the least inv
 
 The app should not ask users for streaming account passwords directly. If login is needed, it should happen inside the provider's own page or through a browser extension flow where credentials are never collected by StreamWrapped.
 
+## Netflix Connector
+
+The first connector uses Netflix's own viewing activity export instead of collecting credentials.
+
+Flow:
+
+1. The user opens Netflix Viewing Activity in their own browser session.
+2. The user downloads the full viewing activity CSV from Netflix.
+3. StreamWrapped reads the CSV locally in the browser with the `File` API.
+4. The app normalizes rows into the shared history shape and immediately updates the report.
+5. Nothing is uploaded or saved automatically.
+6. The user can optionally download a local JSON snapshot.
+7. The user can clear imported data from the tab memory.
+
+Important limitation: Netflix viewing activity CSV exposes titles and watch dates. It does not provide exact watch duration per session, so StreamWrapped marks imported Netflix time as estimated when estimation is enabled.
+
 ## Initial Platform Targets
 
 - Netflix

@@ -48,15 +48,19 @@ label {
 }
 
 .sidebar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  min-height: 100vh;
+  left: 0;
+  bottom: 0;
+  width: 280px;
   display: flex;
   flex-direction: column;
   gap: 28px;
   padding: 24px;
   background: #141414;
   color: #f8fafc;
+  z-index: 100;
+  overflow-y: auto;
 }
 
 .brand {
@@ -133,6 +137,7 @@ label {
 }
 
 main {
+  grid-column: 2;
   width: min(1220px, 100%);
   margin: 0 auto;
   padding: 32px;
@@ -1100,7 +1105,13 @@ select {
 
   .sidebar {
     position: static;
+    width: auto;
+    height: auto;
     min-height: auto;
+  }
+
+  main {
+    grid-column: auto;
   }
 
   .privacy-note {

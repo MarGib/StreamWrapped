@@ -1054,14 +1054,119 @@ const getSpanDescription = (d1, d2) => {
   return parts.join(", ") || "0 dni";
 };
 
+const getNetflixPrice = (date, plan) => {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const d = date.getDate();
+  const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  
+  if (dateStr < "2016-09-20") {
+    if (plan === "podstawowy") return 7.99 * 4.3; // Convert approx to PLN
+    if (plan === "standard") return 9.99 * 4.3;
+    return 11.99 * 4.3;
+  } else if (dateStr < "2021-08-05") {
+    if (plan === "podstawowy") return 34;
+    if (plan === "standard") return 43;
+    return 52;
+  } else if (dateStr < "2024-08-28") {
+    if (plan === "podstawowy") return 29;
+    if (plan === "standard") return 43;
+    return 60;
+  } else if (dateStr < "2026-05-01") {
+    if (plan === "podstawowy") return 33;
+    if (plan === "standard") return 49;
+    return 67;
+  } else {
+    if (plan === "podstawowy") return 37;
+    if (plan === "standard") return 55;
+    return 75;
+  }
+};
+
+const calculateSubscriptionCost = (firstDate, endDate, plan, gaps) => {
+  let totalCost = 0;
+  let activeCost = 0;
+  let billingDatesCount = 0;
+  let activeBillingDatesCount = 0;
+  
+  let currentBillingDate = new Date(firstDate);
+  
+  while (currentBillingDate <= endDate) {
+    const price = getNetflixPrice(currentBillingDate, plan);
+    totalCost += price;
+    billingDatesCount++;
+    
+    // A billing date falls inside a gap if it is between gap start and gap end
+    const isInsideGap = gaps.some(gap => {
+      return currentBillingDate >= gap.start && currentBillingDate <= gap.end;
+    });
+    
+    if (!isInsideGap) {
+      activeCost += price;
+      activeBillingDatesCount++;
+    }
+    
+    // Advance 1 month
+    const nextMonth = currentBillingDate.getMonth() + 1;
+    currentBillingDate = new Date(currentBillingDate.getFullYear(), nextMonth, firstDate.getDate());
+    if (currentBillingDate.getDate() !== firstDate.getDate()) {
+      currentBillingDate.setDate(0); // set to last day of previous month
+    }
+  }
+  
+  return {
+    totalCost: Math.round(totalCost),
+    activeCost: Math.round(activeCost),
+    totalMonths: billingDatesCount,
+    activeMonths: activeBillingDatesCount
+  };
+};
+
+const getLongestStreak = (dates) => {
+  if (!dates.length) return 0;
+  const uniqueDates = Array.from(new Set(dates.map(d => {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }))).sort();
+  
+  let maxStreak = 0;
+  let currentStreak = 0;
+  let prevTime = null;
+  
+  uniqueDates.forEach(dateStr => {
+    const curTime = new Date(dateStr).getTime();
+    if (prevTime === null) {
+      currentStreak = 1;
+    } else {
+      const diffDays = Math.round((curTime - prevTime) / (24 * 3600 * 1000));
+      if (diffDays === 1) {
+        currentStreak++;
+      } else if (diffDays > 1) {
+        if (currentStreak > maxStreak) {
+          maxStreak = currentStreak;
+        }
+        currentStreak = 1;
+      }
+    }
+    prevTime = curTime;
+  });
+  
+  if (currentStreak > maxStreak) {
+    maxStreak = currentStreak;
+  }
+  
+  return maxStreak;
+};
+
 const renderAccountSummary = () => {
   const data = filteredByRange();
   const verbalSummariesContainer = document.querySelector("#verbalSummaries");
   const lifePercentageResultContainer = document.querySelector("#lifePercentageResult");
+  const subscriptionCostResultContainer = document.querySelector("#subscriptionCostResult");
 
   if (!data.length) {
     verbalSummariesContainer.innerHTML = `<p class="empty-state">Wgraj dane historii oglądania, aby wyświetlić analizę konta.</p>`;
     lifePercentageResultContainer.innerHTML = `<span class="muted" style="font-size: 13px;">Wprowadź datę urodzenia po załadowaniu danych.</span>`;
+    subscriptionCostResultContainer.innerHTML = `<span class="muted" style="font-size: 13px;">Wybierz plan po załadowaniu danych.</span>`;
     return;
   }
 
@@ -1072,6 +1177,7 @@ const renderAccountSummary = () => {
 
   const totalDays = Math.ceil(Math.abs(lastDate - firstDate) / (1000 * 60 * 60 * 24));
   const spanText = getSpanDescription(firstDate, lastDate);
+  const todaySpanText = getSpanDescription(firstDate, new Date());
 
   // 2. Gaps
   const GAP_THRESHOLD_MS = 30 * 24 * 3600 * 1000;
@@ -1105,15 +1211,24 @@ const renderAccountSummary = () => {
   const totalMinutes = data.reduce((sum, item) => sum + item.minutes, 0);
   const detailedTimeText = formatDetailedTime(totalMinutes);
 
+  // 4. Longest Day Streak
+  const streak = getLongestStreak(dates);
+
   // Render verbal summaries
   verbalSummariesContainer.innerHTML = `
     <p>
       <span class="summary-label">Okres posiadania konta:</span>
-      <span class="summary-value">Jesteś posiadaczem Netflixa od <strong>${formatPolishDateStr(firstDate, false)}</strong> do <strong>${formatPolishDateStr(lastDate, false)}</strong> (łącznie: <strong>${spanText}</strong>, czyli <strong>${totalDays} dni</strong>).</span>
+      <span class="summary-value">
+        Jesteś posiadaczem Netflixa od <strong>${formatPolishDateStr(firstDate, false)}</strong> do <strong>${formatPolishDateStr(lastDate, false)}</strong> (łącznie: <strong>${spanText}</strong>, czyli <strong>${totalDays} dni</strong> historii w pliku CSV).<br>
+        Od pierwszego seansu do dzisiaj (<strong>${formatPolishDateStr(new Date(), false)}</strong>) minęło łącznie <strong>${todaySpanText}</strong> stażu abonenckiego.
+      </span>
     </p>
     <p>
-      <span class="summary-label">Ciągłość subskrypcji i przerw:</span>
-      <span class="summary-value">${gapsText}</span>
+      <span class="summary-label">Ciągłość subskrypcji i serii:</span>
+      <span class="summary-value">
+        ${gapsText}<br>
+        Twój najdłuższy codzienny maraton trwał aż <strong>${getPolishPlural(streak, "dzień", "dni", "dni")} z rzędu</strong> bez ani jednego dnia przerwy!
+      </span>
     </p>
     <p>
       <span class="summary-label">Łączny czas przed ekranem:</span>
@@ -1121,7 +1236,7 @@ const renderAccountSummary = () => {
     </p>
   `;
 
-  // 4. Life Percentage
+  // 5. Life Percentage
   const birthDateInput = document.querySelector("#birthDateInput");
   const birthDateValue = birthDateInput.value;
   if (birthDateValue) {
@@ -1147,10 +1262,32 @@ const renderAccountSummary = () => {
         Twojego życia od urodzenia do dziś.
       `;
     } else {
-      lifePercentageResultContainer.innerHTML = `<span class="text-danger" style="color: var(--red); font-size: 13px;">Data urodzenia nie może być w przyszłości relative do historii oglądania.</span>`;
+      lifePercentageResultContainer.innerHTML = `<span class="text-danger" style="color: var(--red); font-size: 13px;">Data urodzenia nie może być w przyszłości.</span>`;
     }
   } else {
     lifePercentageResultContainer.innerHTML = `<span class="muted" style="font-size: 13px;">Wprowadź datę urodzenia powyżej, aby obliczyć procent życia spędzony z Netflixem.</span>`;
+  }
+
+  // 6. Cost Calculation
+  const selectedPlan = document.querySelector("#planSelect").value;
+  const costData = calculateSubscriptionCost(firstDate, new Date(), selectedPlan, gaps);
+  if (costData) {
+    const formattedTotal = costData.totalCost.toLocaleString('pl-PL') + " zł";
+    const formattedActive = costData.activeCost.toLocaleString('pl-PL') + " zł";
+    
+    if (gaps.length > 0) {
+      subscriptionCostResultContainer.innerHTML = `
+        Szacowany koszt subskrypcji od początku:<br>
+        <strong>${formattedActive}</strong> <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(z przerwami)</span><br>
+        <span style="font-size: 12px; color: var(--muted);">Bez przerw: ${formattedTotal} (${costData.totalMonths} mies.)</span>
+      `;
+    } else {
+      subscriptionCostResultContainer.innerHTML = `
+        Szacowany koszt subskrypcji od początku:<br>
+        <strong>${formattedTotal}</strong><br>
+        <span style="font-size: 12px; color: var(--muted);">${costData.totalMonths} okresów rozliczeniowych</span>
+      `;
+    }
   }
 };
 
@@ -1518,19 +1655,47 @@ const renderStory = () => {
     document.querySelector("#storyPeakMonthDetail").textContent = "-";
   }
 
-  // Fav Day Card
-  if (favDay) {
-    document.querySelector("#storyFavDay").textContent = favDay.name;
-    document.querySelector("#storyFavDayDetail").textContent = `${favDay.percentage}% czasu oglądania (${formatHours(favDay.minutes)})`;
-  } else {
-    document.querySelector("#storyFavDay").textContent = "-";
-    document.querySelector("#storyFavDayDetail").textContent = "-";
+  // Cost Calculation Card
+  const selectedPlan = document.querySelector("#planSelect").value;
+  const planNames = {
+    premium: "Premium",
+    standard: "Standard",
+    podstawowy: "Podstawowy"
+  };
+  
+  const dates = data.map((item) => parseDate(item.watchedAt)).sort((a, b) => a - b);
+  const firstDate = dates[0];
+  const lastDate = dates[dates.length - 1];
+  
+  // Calculate gaps
+  const GAP_THRESHOLD_MS = 30 * 24 * 3600 * 1000;
+  const gaps = [];
+  for (let i = 1; i < dates.length; i++) {
+    const diff = dates[i] - dates[i - 1];
+    if (diff > GAP_THRESHOLD_MS) {
+      gaps.push({
+        start: dates[i - 1],
+        end: dates[i]
+      });
+    }
   }
 
-  // Life or Unique Card
-  const labelEl = document.querySelector("#storyLifeOrUniqueLabel");
-  const titleEl = document.querySelector("#storyLifeOrUniqueTitle");
-  const detailEl = document.querySelector("#storyLifeOrUniqueDetail");
+  const costData = firstDate 
+    ? calculateSubscriptionCost(firstDate, new Date(), selectedPlan, gaps)
+    : null;
+
+  if (costData) {
+    document.querySelector("#storySubCostTitle").textContent = `${costData.activeCost.toLocaleString('pl-PL')} zł`;
+    document.querySelector("#storySubCostDetail").textContent = `Plan ${planNames[selectedPlan]} (${costData.activeMonths} mies. aktywnych)`;
+  } else {
+    document.querySelector("#storySubCostTitle").textContent = "-";
+    document.querySelector("#storySubCostDetail").textContent = "-";
+  }
+
+  // Life or Fav/Unique Card (Card 6)
+  const labelEl = document.querySelector("#storyLifeOrFavLabel");
+  const titleEl = document.querySelector("#storyLifeOrFavTitle");
+  const detailEl = document.querySelector("#storyLifeOrFavDetail");
 
   const birthDateInput = document.querySelector("#birthDateInput");
   const birthDateValue = birthDateInput.value;
@@ -1538,9 +1703,6 @@ const renderStory = () => {
   let lifePercentageDetail = null;
 
   if (birthDateValue && data.length) {
-    const dates = data.map((item) => parseDate(item.watchedAt)).sort((a, b) => a - b);
-    const lastDate = dates[dates.length - 1];
-    const birthDate = new Date(birthDateValue);
     const referenceDate = lastDate > new Date() ? lastDate : new Date();
     const lifespanMs = referenceDate - birthDate;
     
@@ -1567,6 +1729,10 @@ const renderStory = () => {
     labelEl.textContent = "Procent życia";
     titleEl.textContent = lifePercentageText;
     detailEl.textContent = lifePercentageDetail;
+  } else if (favDay) {
+    labelEl.textContent = "Ulubiony dzień";
+    titleEl.textContent = favDay.name;
+    detailEl.textContent = `${favDay.percentage}% czasu oglądania (${formatHours(favDay.minutes)})`;
   } else {
     labelEl.textContent = "Unikalne produkcje";
     titleEl.textContent = `${uniqueTitlesCount} pozycji`;
@@ -1889,10 +2055,24 @@ if (savedBirthDate) {
   document.querySelector("#birthDateInput").value = savedBirthDate;
 }
 
+// Load plan from localStorage on startup
+const savedPlan = localStorage.getItem("streamwrapped_netflix_plan");
+if (savedPlan) {
+  document.querySelector("#planSelect").value = savedPlan;
+}
+
 // Attach listener to birth date input
 document.querySelector("#birthDateInput").addEventListener("input", (event) => {
   localStorage.setItem("streamwrapped_birth_date", event.target.value);
   renderAccountSummary();
+  renderStory();
+});
+
+// Attach listener to plan select dropdown
+document.querySelector("#planSelect").addEventListener("change", (event) => {
+  localStorage.setItem("streamwrapped_netflix_plan", event.target.value);
+  renderAccountSummary();
+  renderStory();
 });
 
 renderAll();

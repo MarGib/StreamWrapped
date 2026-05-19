@@ -115,11 +115,24 @@
             <div class="summary-text" id="verbalSummaries">
               <!-- Słowne podsumowania generowane przez JS -->
             </div>
-            <div class="birthdate-card">
-              <label for="birthDateInput">Wpisz swoją datę urodzenia:</label>
-              <input type="date" id="birthDateInput" class="custom-input">
-              <div id="lifePercentageResult" class="percentage-result">
-                <!-- Wynik procentu życia -->
+            <div class="summary-sidebar-cards" style="display: flex; flex-direction: column; gap: 16px;">
+              <div class="birthdate-card">
+                <label for="birthDateInput">Wpisz swoją datę urodzenia:</label>
+                <input type="date" id="birthDateInput" class="custom-input">
+                <div id="lifePercentageResult" class="percentage-result">
+                  <!-- Wynik procentu życia -->
+                </div>
+              </div>
+              <div class="birthdate-card subscription-card">
+                <label for="planSelect">Wybierz Twój plan Netflix:</label>
+                <select id="planSelect" class="custom-input" style="width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #fbfaf7; color: var(--text); padding: 8px 12px; margin-top: 4px; font-family: inherit; font-size: 14px; outline: none;">
+                  <option value="premium" selected>Premium (4K + HDR)</option>
+                  <option value="standard">Standard (Full HD)</option>
+                  <option value="podstawowy">Podstawowy (HD)</option>
+                </select>
+                <div id="subscriptionCostResult" class="percentage-result">
+                  <!-- Wynik kosztów subskrypcji -->
+                </div>
               </div>
             </div>
           </div>
@@ -323,14 +336,14 @@
                 <p id="storyPeakMonthDetail">-</p>
               </div>
               <div>
-                <span>Ulubiony dzień</span>
-                <strong id="storyFavDay">-</strong>
-                <p id="storyFavDayDetail">-</p>
+                <span>Koszt subskrypcji</span>
+                <strong id="storySubCostTitle">-</strong>
+                <p id="storySubCostDetail">-</p>
               </div>
               <div>
-                <span id="storyLifeOrUniqueLabel">Procent życia</span>
-                <strong id="storyLifeOrUniqueTitle">-</strong>
-                <p id="storyLifeOrUniqueDetail">-</p>
+                <span id="storyLifeOrFavLabel">Procent życia</span>
+                <strong id="storyLifeOrFavTitle">-</strong>
+                <p id="storyLifeOrFavDetail">-</p>
               </div>
             </div>
             <div id="storyMiniBars" class="story-bars"></div>

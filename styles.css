@@ -1173,7 +1173,7 @@ select {
   letter-spacing: 0.05em;
 }
 
-.birthdate-card input[type="date"] {
+.birthdate-card .custom-input {
   min-height: 38px;
   padding: 8px 12px;
   border: 1px solid var(--line);
@@ -1186,7 +1186,7 @@ select {
   transition: border-color 0.2s;
 }
 
-.birthdate-card input[type="date"]:focus {
+.birthdate-card .custom-input:focus {
   border-color: var(--text);
 }
 

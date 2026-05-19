@@ -44,7 +44,7 @@ const state = {
   dateTo: "",
   historySort: "date-desc",
   visibleHistory: 50,
-  netflixDateFormat: "mdy",
+  netflixDateFormat: "unknown",
   usingImportedData: false,
 };
 
@@ -180,6 +180,48 @@ const parseCsv = (csvText) => {
   );
 };
 
+const getNetflixRowDateValue = (row) =>
+  row.date || row.data || row.datum || row.fecha || row["watch date"] || row["view date"] || Object.values(row)[1] || "";
+
+const inferNetflixDateFormat = (rows) => {
+  let monthFirstScore = 0;
+  let dayFirstScore = 0;
+
+  rows.forEach((row) => {
+    const raw = String(getNetflixRowDateValue(row)).trim();
+    const match = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+
+    if (!match) {
+      return;
+    }
+
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+
+    if (second > 12 && first <= 12) {
+      monthFirstScore += 3;
+    } else if (first > 12 && second <= 12) {
+      dayFirstScore += 3;
+    } else {
+      monthFirstScore += 1;
+    }
+  });
+
+  return dayFirstScore > monthFirstScore ? "dmy" : "mdy";
+};
+
+const getDateFormatLabel = (format) => {
+  if (format === "dmy") {
+    return "Wykryto dzień/miesiąc/rok, np. 18/05/2026 = 18 maja";
+  }
+
+  if (format === "mdy") {
+    return "Wykryto miesiąc/dzień/rok, np. 5/18/26 = 18 maja";
+  }
+
+  return "Wykryję automatycznie po wczytaniu CSV";
+};
+
 const parseNetflixDate = (value, format = "mdy") => {
   const raw = String(value ?? "").trim();
 
@@ -279,8 +321,7 @@ const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") =>
   rows
     .map((row) => {
       const title = row.title || row.tytuł || row.tytul || row.titel || row.titre || row.título || Object.values(row)[0];
-      const watchedDate =
-        row.date || row.data || row.datum || row.fecha || row["watch date"] || row["view date"] || Object.values(row)[1];
+      const watchedDate = getNetflixRowDateValue(row);
       const parsedDateResult = parseNetflixDate(watchedDate, dateFormat);
 
       if (!title || !parsedDateResult) {
@@ -306,13 +347,21 @@ const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") =>
     })
     .filter(Boolean);
 
-const importNetflixCsvText = (csvText, shouldEstimate, dateFormat = "mdy") =>
-  normalizeNetflixRows(parseCsv(csvText), shouldEstimate, dateFormat);
+const importNetflixCsvData = (csvText, shouldEstimate) => {
+  const rows = parseCsv(csvText);
+  const dateFormat = inferNetflixDateFormat(rows);
+  return {
+    dateFormat,
+    items: normalizeNetflixRows(rows, shouldEstimate, dateFormat),
+  };
+};
+
+const importNetflixCsvText = (csvText, shouldEstimate) => importNetflixCsvData(csvText, shouldEstimate).items;
 
 const updateImportControls = () => {
   document.querySelector("#downloadLocalSnapshot").disabled = importedNetflixHistory.length === 0;
   document.querySelector("#clearImportedData").disabled = !state.usingImportedData;
-  document.querySelector("#netflixDateFormat").value = state.netflixDateFormat;
+  document.querySelector("#detectedDateFormat").textContent = getDateFormatLabel(state.netflixDateFormat);
   document.querySelector("#dataModePill").lastChild.textContent = state.usingImportedData
     ? " Dane z pliku lokalnego"
     : " Dane przykładowe";
@@ -810,7 +859,7 @@ const renderInsights = () => {
       <article class="insight-item">
         <div>
           <strong>${escapeHtml(group.series)}</strong>
-          <span>${group.count} wpisów, ${group.days.size} dni aktywności</span>
+          <span>${group.count} wpisów, ${group.days.size} dni aktywności, ${escapeHtml(formatDateKey(group.firstDate))} - ${escapeHtml(formatDateKey(group.lastDate))}</span>
         </div>
         <b>${formatHours(group.minutes)}</b>
       </article>
@@ -1098,13 +1147,15 @@ document.querySelector(".filter-row").addEventListener("click", (event) => {
 
 const applyNetflixImport = (csvText, options = {}) => {
   const shouldEstimate = document.querySelector("#estimateNetflixTime").checked;
-  const normalized = importNetflixCsvText(csvText, shouldEstimate, state.netflixDateFormat);
+  const imported = importNetflixCsvData(csvText, shouldEstimate);
+  const normalized = imported.items;
 
   if (!normalized.length) {
     setImportStatus("Nie udało się znaleźć kolumn tytułu i daty w tym pliku CSV.", "error");
     return false;
   }
 
+  state.netflixDateFormat = imported.dateFormat;
   importedNetflixHistory = normalized;
   watchHistory = importedNetflixHistory;
   state.usingImportedData = true;
@@ -1113,6 +1164,7 @@ const applyNetflixImport = (csvText, options = {}) => {
   state.dateFrom = "";
   state.dateTo = "";
   state.query = "";
+  state.netflixDateFormat = "unknown";
   state.historySort = "date-desc";
   state.visibleHistory = historyPageSize;
   document.querySelector("#historySearch").value = "";
@@ -1121,11 +1173,7 @@ const applyNetflixImport = (csvText, options = {}) => {
   const estimatedNote = shouldEstimate
     ? " Czas jest szacowany, bo Netflix nie podaje pełnej długości sesji w tym eksporcie."
     : " Czas oglądania pozostawiono jako 0, bo szacowanie jest wyłączone.";
-  const formatNote = state.netflixDateFormat === "mdy"
-    ? " Format dat: miesiąc/dzień/rok."
-    : state.netflixDateFormat === "dmy"
-      ? " Format dat: dzień/miesiąc/rok."
-      : " Format dat: auto.";
+  const formatNote = ` ${getDateFormatLabel(state.netflixDateFormat)}.`;
   const action = options.reparsed ? "Przeparsowano" : "Zaimportowano";
   setImportStatus(
     `${action} ${normalized.length} wpisów z Netflixa.${formatNote} Dane są tylko w pamięci tej karty.${estimatedNote}`,
@@ -1134,17 +1182,6 @@ const applyNetflixImport = (csvText, options = {}) => {
   renderAll();
   return true;
 };
-
-document.querySelector("#netflixDateFormat").addEventListener("change", (event) => {
-  state.netflixDateFormat = event.target.value;
-
-  if (lastNetflixCsvText) {
-    applyNetflixImport(lastNetflixCsvText, { reparsed: true });
-  } else {
-    updateImportControls();
-    setImportStatus("Format dat ustawiony. Wczytaj CSV, żeby zastosować go do historii.");
-  }
-});
 
 document.querySelector("#netflixCsvInput").addEventListener("change", async (event) => {
   const [file] = event.target.files;

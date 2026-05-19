@@ -78,6 +78,52 @@ const formatCompactTime = (minutes) => {
   return mins ? `${hours}h ${mins}m` : `${hours}h`;
 };
 
+const getPolishPlural = (value, one, few, many) => {
+  if (value === 1) return `${value} ${one}`;
+  if (value % 10 >= 2 && value % 10 <= 4 && (value % 100 < 10 || value % 100 >= 20)) {
+    return `${value} ${few}`;
+  }
+  return `${value} ${many}`;
+};
+
+const formatDetailedTime = (minutes) => {
+  const totalSeconds = minutes * 60;
+  
+  const SECONDS_IN_YEAR = 365 * 24 * 3600;
+  const SECONDS_IN_MONTH = 30 * 24 * 3600;
+  const SECONDS_IN_DAY = 24 * 3600;
+  const SECONDS_IN_HOUR = 3600;
+  const SECONDS_IN_MINUTE = 60;
+
+  let remaining = totalSeconds;
+
+  const years = Math.floor(remaining / SECONDS_IN_YEAR);
+  remaining %= SECONDS_IN_YEAR;
+
+  const months = Math.floor(remaining / SECONDS_IN_MONTH);
+  remaining %= SECONDS_IN_MONTH;
+
+  const days = Math.floor(remaining / SECONDS_IN_DAY);
+  remaining %= SECONDS_IN_DAY;
+
+  const hours = Math.floor(remaining / SECONDS_IN_HOUR);
+  remaining %= SECONDS_IN_HOUR;
+
+  const mins = Math.floor(remaining / SECONDS_IN_MINUTE);
+  const secs = remaining % SECONDS_IN_MINUTE;
+
+  const parts = [
+    getPolishPlural(years, "rok", "lata", "lat"),
+    getPolishPlural(months, "miesiąc", "miesiące", "miesięcy"),
+    getPolishPlural(days, "dzień", "dni", "dni"),
+    getPolishPlural(hours, "godzina", "godziny", "godzin"),
+    getPolishPlural(mins, "minuta", "minuty", "minut"),
+    getPolishPlural(secs, "sekunda", "sekundy", "sekund")
+  ];
+
+  return parts.join(", ");
+};
+
 const parseDate = (value) => new Date(value);
 
 const formatLocalISO = (date) => {
@@ -979,7 +1025,7 @@ const renderMetrics = () => {
   const longestDay = getTopDays()[0];
 
   const hasEstimatedTime = data.some((item) => item.estimated);
-  document.querySelector("#totalHours").textContent = `${formatHours(totalMinutes)}${hasEstimatedTime ? "*" : ""}`;
+  document.querySelector("#totalHours").textContent = `${formatDetailedTime(totalMinutes)}${hasEstimatedTime ? "*" : ""}`;
   document.querySelector("#sessionCount").textContent = data.length.toString();
   document.querySelector("#peakTime").textContent = longestDay ? formatCompactTime(longestDay.minutes) : "-";
   document.querySelector("#peakTimeNote").textContent = longestDay

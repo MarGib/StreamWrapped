@@ -1037,6 +1037,123 @@ const renderMetrics = () => {
     : "Brak danych";
 };
 
+const getSpanDescription = (d1, d2) => {
+  const diffTime = Math.abs(d2 - d1);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  const years = Math.floor(diffDays / 365);
+  const remainingDays = diffDays % 365;
+  const months = Math.floor(remainingDays / 30);
+  const days = remainingDays % 30;
+  
+  const parts = [];
+  if (years > 0) parts.push(getPolishPlural(years, "rok", "lata", "lat"));
+  if (months > 0) parts.push(getPolishPlural(months, "miesiąc", "miesiące", "miesięcy"));
+  if (days > 0) parts.push(getPolishPlural(days, "dzień", "dni", "dni"));
+  
+  return parts.join(", ") || "0 dni";
+};
+
+const renderAccountSummary = () => {
+  const data = filteredByRange();
+  const verbalSummariesContainer = document.querySelector("#verbalSummaries");
+  const lifePercentageResultContainer = document.querySelector("#lifePercentageResult");
+
+  if (!data.length) {
+    verbalSummariesContainer.innerHTML = `<p class="empty-state">Wgraj dane historii oglądania, aby wyświetlić analizę konta.</p>`;
+    lifePercentageResultContainer.innerHTML = `<span class="muted" style="font-size: 13px;">Wprowadź datę urodzenia po załadowaniu danych.</span>`;
+    return;
+  }
+
+  // 1. Activity span
+  const dates = data.map((item) => parseDate(item.watchedAt)).sort((a, b) => a - b);
+  const firstDate = dates[0];
+  const lastDate = dates[dates.length - 1];
+
+  const totalDays = Math.ceil(Math.abs(lastDate - firstDate) / (1000 * 60 * 60 * 24));
+  const spanText = getSpanDescription(firstDate, lastDate);
+
+  // 2. Gaps
+  const GAP_THRESHOLD_MS = 30 * 24 * 3600 * 1000;
+  const gaps = [];
+  
+  for (let i = 1; i < dates.length; i++) {
+    const diff = dates[i] - dates[i - 1];
+    if (diff > GAP_THRESHOLD_MS) {
+      gaps.push({
+        start: dates[i - 1],
+        end: dates[i],
+        durationDays: Math.floor(diff / (1000 * 60 * 60 * 24))
+      });
+    }
+  }
+
+  gaps.sort((a, b) => b.durationDays - a.durationDays);
+
+  let gapsText = "";
+  if (gaps.length === 0) {
+    gapsText = "W analizowanym okresie nie wykryto przerw w oglądaniu dłuższych niż 30 dni. Wygląda na to, że subskrypcja była aktywna nieprzerwanie!";
+  } else {
+    const longestGap = gaps[0];
+    const formattedStart = formatPolishDateStr(longestGap.start, false);
+    const formattedEnd = formatPolishDateStr(longestGap.end, false);
+    const countText = getPolishPlural(gaps.length, "przerwę", "przerwy", "przerw");
+    gapsText = `Wykryto <strong>${countText}</strong> w oglądaniu trwających ponad 30 dni. Najdłuższa z nich trwała <strong>${longestGap.durationDays} dni</strong> (od ${formattedStart} do ${formattedEnd}), co może sugerować przerwę w opłacaniu abonamentu.`;
+  }
+
+  // 3. Screen Time
+  const totalMinutes = data.reduce((sum, item) => sum + item.minutes, 0);
+  const detailedTimeText = formatDetailedTime(totalMinutes);
+
+  // Render verbal summaries
+  verbalSummariesContainer.innerHTML = `
+    <p>
+      <span class="summary-label">Okres posiadania konta:</span>
+      <span class="summary-value">Jesteś posiadaczem Netflixa od <strong>${formatPolishDateStr(firstDate, false)}</strong> do <strong>${formatPolishDateStr(lastDate, false)}</strong> (łącznie: <strong>${spanText}</strong>, czyli <strong>${totalDays} dni</strong>).</span>
+    </p>
+    <p>
+      <span class="summary-label">Ciągłość subskrypcji i przerw:</span>
+      <span class="summary-value">${gapsText}</span>
+    </p>
+    <p>
+      <span class="summary-label">Łączny czas przed ekranem:</span>
+      <span class="summary-value">Na oglądanie Netflixa poświęciłeś łącznie <strong>${detailedTimeText}</strong>.</span>
+    </p>
+  `;
+
+  // 4. Life Percentage
+  const birthDateInput = document.querySelector("#birthDateInput");
+  const birthDateValue = birthDateInput.value;
+  if (birthDateValue) {
+    const birthDate = new Date(birthDateValue);
+    const referenceDate = lastDate > new Date() ? lastDate : new Date();
+    const lifespanMs = referenceDate - birthDate;
+    
+    if (lifespanMs > 0) {
+      const screenTimeMs = totalMinutes * 60 * 1000;
+      const percentage = (screenTimeMs / lifespanMs) * 100;
+      let formattedPercentage = "";
+      if (percentage >= 1) {
+        formattedPercentage = percentage.toFixed(2);
+      } else if (percentage > 0) {
+        formattedPercentage = percentage.toFixed(4);
+      } else {
+        formattedPercentage = "0.00";
+      }
+
+      lifePercentageResultContainer.innerHTML = `
+        Czas spędzony przed ekranem stanowi:
+        <strong>${formattedPercentage}%</strong>
+        Twojego życia od urodzenia do dziś.
+      `;
+    } else {
+      lifePercentageResultContainer.innerHTML = `<span class="text-danger" style="color: var(--red); font-size: 13px;">Data urodzenia nie może być w przyszłości relative do historii oglądania.</span>`;
+    }
+  } else {
+    lifePercentageResultContainer.innerHTML = `<span class="muted" style="font-size: 13px;">Wprowadź datę urodzenia powyżej, aby obliczyć procent życia spędzony z Netflixem.</span>`;
+  }
+};
+
 const renderPlatformBars = () => {
   const totals = filteredByRange().reduce((acc, item) => {
     acc[item.platform] = (acc[item.platform] || 0) + item.minutes;
@@ -1403,6 +1520,7 @@ const renderCoverage = () => {
 const renderAll = () => {
   updateDateInputs();
   renderMetrics();
+  renderAccountSummary();
   renderPlatformBars();
   renderCalendar();
   renderInsights();
@@ -1620,6 +1738,18 @@ document.querySelector("#clearImportedData").addEventListener("click", () => {
 
 globalThis.StreamWrapped = Object.freeze({
   importNetflixCsvText,
+});
+
+// Load birth date from localStorage on startup
+const savedBirthDate = localStorage.getItem("streamwrapped_birth_date");
+if (savedBirthDate) {
+  document.querySelector("#birthDateInput").value = savedBirthDate;
+}
+
+// Attach listener to birth date input
+document.querySelector("#birthDateInput").addEventListener("input", (event) => {
+  localStorage.setItem("streamwrapped_birth_date", event.target.value);
+  renderAccountSummary();
 });
 
 renderAll();

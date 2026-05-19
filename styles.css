@@ -1106,6 +1106,101 @@ select {
   background: var(--line);
 }
 
+.summary-panel {
+  margin-bottom: 24px;
+}
+
+.summary-content {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.summary-text {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.summary-text p {
+  margin: 0 0 16px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-text p span.summary-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.summary-text p span.summary-value {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.summary-text p span.summary-value strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.birthdate-card {
+  padding: 20px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
+}
+
+.birthdate-card label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.birthdate-card input[type="date"] {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfaf7;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.birthdate-card input[type="date"]:focus {
+  border-color: var(--text);
+}
+
+.percentage-result {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 4px;
+}
+
+.percentage-result strong {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--teal);
+  display: block;
+  margin-top: 4px;
+}
+
 @media (max-width: 1020px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1150,7 +1245,8 @@ select {
 
   .report-grid,
   .content-grid,
-  .insights-grid {
+  .insights-grid,
+  .summary-content {
     grid-template-columns: 1fr;
   }
 

@@ -70,11 +70,6 @@
               <span>Szacuj czas oglądania. Netflix CSV podaje datę i tytuł, ale nie podaje godziny ani realnej długości sesji.</span>
             </label>
 
-            <div class="date-format-control">
-              <span>Format dat</span>
-              <strong id="detectedDateFormat">Wykryję automatycznie po wczytaniu CSV</strong>
-            </div>
-
             <div id="netflixImportStatus" class="import-status" role="status" aria-live="polite">
               Gotowe na import pliku CSV z Netflixa.
             </div>
@@ -332,6 +327,12 @@
           </div>
           <div class="filter-row" role="group" aria-label="Filtr platform">
             <button class="filter-chip active" data-platform="all" type="button">Wszystkie</button>
+          </div>
+          <div class="history-header">
+            <span>Tytuł / Typ / Gatunek</span>
+            <span>Platforma</span>
+            <span>Kiedy obejrzano</span>
+            <span>Czas trwania</span>
           </div>
           <div id="historyList" class="history-list" aria-live="polite"></div>
           <button id="loadMoreHistory" class="secondary-button load-more" type="button">Pokaż więcej</button>

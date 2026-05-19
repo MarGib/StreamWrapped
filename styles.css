@@ -588,6 +588,21 @@ select {
   padding-right: 2px;
 }
 
+.history-header {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 144px 120px 92px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
 .history-item {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) 144px 120px 92px;
@@ -1158,6 +1173,10 @@ select {
   .share-stats,
   .story-bar {
     grid-template-columns: 1fr;
+  }
+
+  .history-header {
+    display: none;
   }
 
   .history-item {

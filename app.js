@@ -97,6 +97,25 @@ const toDateKey = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatPolishDateStr = (date, includeTime = false) => {
+  if (!date || Number.isNaN(date.getTime())) return "";
+  const day = date.getDate();
+  const months = [
+    "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
+    "lipca", "sierpnia", "września", "października", "listopada", "grudnia"
+  ];
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+  
+  const dateStr = `${day} ${month} ${year}`;
+  if (!includeTime) {
+    return dateStr;
+  }
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${dateStr}, ${hours}:${minutes}`;
+};
+
 const formatDateKey = (dateKey) => {
   if (!dateKey) return "";
   const parts = dateKey.split("-");
@@ -104,23 +123,12 @@ const formatDateKey = (dateKey) => {
   const [year, month, day] = parts.map(Number);
   if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return dateKey;
   const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return dateKey;
-  return date.toLocaleDateString(netflixDateLocale, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatPolishDateStr(date, false);
 };
 
 const formatWatchedDate = (item) => {
   const date = parseDate(item.watchedAt);
-  const dateLabel = date.toLocaleDateString(netflixDateLocale);
-
-  if (item.hasTime === false) {
-    return dateLabel;
-  }
-
-  return `${dateLabel} ${date.toLocaleTimeString(netflixDateLocale, { hour: "2-digit", minute: "2-digit" })}`;
+  return formatPolishDateStr(date, item.hasTime !== false);
 };
 
 const getDateBounds = (data = watchHistory) => {
@@ -231,18 +239,6 @@ const inferNetflixDateFormat = (rows) => {
   }
 
   return "dmy";
-};
-
-const getDateFormatLabel = (format) => {
-  if (format === "dmy") {
-    return "Wykryto dzień/miesiąc/rok, np. 18/05/2026 = 18 maja";
-  }
-
-  if (format === "mdy") {
-    return "Wykryto miesiąc/dzień/rok, np. 5/18/26 = 18 maja";
-  }
-
-  return "Wykryję automatycznie po wczytaniu CSV";
 };
 
 const parseNetflixDate = (value, format = "mdy") => {
@@ -361,10 +357,124 @@ const estimateNetflixMinutes = (title, shouldEstimate) => {
   return inferNetflixType(title) === "Serial" ? 45 : 100;
 };
 
-const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") =>
-  rows
-    .map((row) => {
-      const title = row.title || row.tytuł || row.tytul || row.titel || row.titre || row.título || Object.values(row)[0];
+const resolveOrphanedTitlesInRows = (rows) => {
+  const getRawTitle = (row) => {
+    if (!row) return "";
+    return String(row.title || row.tytuł || row.tytul || row.titel || row.titre || row.título || Object.values(row)[0] || "").trim();
+  };
+
+  const getSeriesPrefix = (title) => {
+    const clean = title.trim();
+    if (!clean) return null;
+    
+    // An orphaned title starts with colon, or is just "odcinek X" / "episode X" / empty
+    const isOrphan = clean.startsWith(":") || 
+                     /^(odcinek|episode|sezon|season)\b/i.test(clean) || 
+                     /^\d+$/.test(clean);
+                     
+    if (isOrphan) {
+      return null;
+    }
+    
+    const parts = clean.split(":");
+    if (parts.length > 1) {
+      const seasonIndex = parts.findIndex(p => 
+        /(season|sezon|series|część|czesc|cz\.)\s*\d+/i.test(p)
+      );
+      if (seasonIndex !== -1) {
+        return parts.slice(0, seasonIndex + 1).join(":").trim();
+      }
+      return parts[0].trim();
+    }
+    
+    return null;
+  };
+
+  const rawTitles = rows.map(getRawTitle);
+  const resolved = [...rawTitles];
+
+  let i = 0;
+  while (i < rawTitles.length) {
+    const title = rawTitles[i];
+    const isOrphan = title.startsWith(":") || 
+                     /^(odcinek|episode)\b/i.test(title) || 
+                     title === "";
+
+    if (!isOrphan) {
+      i += 1;
+      continue;
+    }
+
+    // Start of an orphaned block
+    const blockStart = i;
+    while (i < rawTitles.length) {
+      const nextTitle = rawTitles[i];
+      const nextOrphan = nextTitle.startsWith(":") || 
+                         /^(odcinek|episode)\b/i.test(nextTitle) || 
+                         nextTitle === "";
+      if (!nextOrphan) {
+        break;
+      }
+      i += 1;
+    }
+    const blockEnd = i - 1;
+
+    // Find the nearest series prefix above and below
+    let upPrefix = null;
+    let upDist = Infinity;
+    for (let j = blockStart - 1; j >= 0; j--) {
+      const prefix = getSeriesPrefix(rawTitles[j]);
+      if (prefix) {
+        upPrefix = prefix;
+        upDist = blockStart - j - 1;
+        break;
+      }
+    }
+
+    let downPrefix = null;
+    let downDist = Infinity;
+    for (let j = blockEnd + 1; j < rawTitles.length; j++) {
+      const prefix = getSeriesPrefix(rawTitles[j]);
+      if (prefix) {
+        downPrefix = prefix;
+        downDist = j - blockEnd - 1;
+        break;
+      }
+    }
+
+    // Determine the winning prefix
+    let winner = null;
+    if (upDist < downDist) {
+      winner = upPrefix;
+    } else if (downDist < upDist) {
+      winner = downPrefix;
+    } else {
+      winner = upPrefix || downPrefix;
+    }
+
+    // Apply the winning prefix to all items in the block
+    if (winner) {
+      for (let k = blockStart; k <= blockEnd; k++) {
+        const raw = rawTitles[k];
+        let suffix = raw.startsWith(":") ? raw.substring(1).trim() : raw;
+        resolved[k] = suffix ? `${winner}: ${suffix}` : winner;
+      }
+    } else {
+      for (let k = blockStart; k <= blockEnd; k++) {
+        const raw = rawTitles[k];
+        resolved[k] = raw || "Nieznany serial";
+      }
+    }
+  }
+
+  return resolved;
+};
+
+const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") => {
+  const resolvedTitles = resolveOrphanedTitlesInRows(rows);
+  return rows
+    .map((row, index) => {
+      const title = resolvedTitles[index];
       const watchedDate = getNetflixRowDateValue(row);
       const parsedDateResult = parseNetflixDate(watchedDate, dateFormat);
 
@@ -372,19 +482,15 @@ const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") =>
         return null;
       }
 
-      let cleanTitle = String(title).trim();
-      if (cleanTitle.startsWith(":")) {
-        cleanTitle = "Nieznany serial" + cleanTitle;
-      }
-      const seriesInfo = parseSeriesInfo(cleanTitle);
+      const seriesInfo = parseSeriesInfo(title);
       return {
-        title: cleanTitle,
-        type: inferNetflixType(cleanTitle),
+        title: title,
+        type: inferNetflixType(title),
         platform: "Netflix",
         genre: shouldEstimate ? "Import Netflix, czas szacowany" : "Import Netflix, czas nieznany",
         watchedAt: formatLocalISO(parsedDateResult.date),
         hasTime: parsedDateResult.hasTime,
-        minutes: estimateNetflixMinutes(cleanTitle, shouldEstimate),
+        minutes: estimateNetflixMinutes(title, shouldEstimate),
         estimated: shouldEstimate,
         source: "netflix-csv",
         series: seriesInfo.series,
@@ -393,6 +499,7 @@ const normalizeNetflixRows = (rows, shouldEstimate, dateFormat = "mdy") =>
       };
     })
     .filter(Boolean);
+};
 
 const importNetflixCsvData = (csvText, shouldEstimate) => {
   const rows = parseCsv(csvText);
@@ -408,7 +515,6 @@ const importNetflixCsvText = (csvText, shouldEstimate) => importNetflixCsvData(c
 const updateImportControls = () => {
   document.querySelector("#downloadLocalSnapshot").disabled = importedNetflixHistory.length === 0;
   document.querySelector("#clearImportedData").disabled = !state.usingImportedData;
-  document.querySelector("#detectedDateFormat").textContent = getDateFormatLabel(state.netflixDateFormat);
   document.querySelector("#dataModePill").lastChild.textContent = state.usingImportedData
     ? " Dane z pliku lokalnego"
     : " Dane przykładowe";
@@ -881,7 +987,7 @@ const renderMetrics = () => {
     : "brak danych";
   document.querySelector("#uniqueTitles").textContent = uniqueTitles.toString();
   document.querySelector("#watchSpan").textContent = dates.length
-    ? `${dates[0].toLocaleDateString(netflixDateLocale)} - ${dates[dates.length - 1].toLocaleDateString(netflixDateLocale)}`
+    ? `${formatPolishDateStr(dates[0], false)} - ${formatPolishDateStr(dates[dates.length - 1], false)}`
     : "Brak danych";
 };
 
@@ -1396,10 +1502,9 @@ const applyNetflixImport = (csvText, options = {}) => {
   const estimatedNote = shouldEstimate
     ? " Czas jest szacowany, bo Netflix nie podaje pełnej długości sesji w tym eksporcie."
     : " Czas oglądania pozostawiono jako 0, bo szacowanie jest wyłączone.";
-  const formatNote = ` ${getDateFormatLabel(state.netflixDateFormat)}.`;
   const action = options.reparsed ? "Przeparsowano" : "Zaimportowano";
   setImportStatus(
-    `${action} ${normalized.length} wpisów z Netflixa.${formatNote} Dane są tylko w pamięci tej karty.${estimatedNote}`,
+    `${action} ${normalized.length} wpisów z Netflixa. Dane są tylko w pamięci tej karty.${estimatedNote}`,
     shouldEstimate ? "warning" : "success"
   );
   renderAll();

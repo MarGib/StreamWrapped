@@ -87,6 +87,10 @@ const getPolishPlural = (value, one, few, many) => {
 };
 
 const formatDetailedTime = (minutes) => {
+  if (minutes === 0) {
+    return "0 minut";
+  }
+
   const totalSeconds = minutes * 60;
   
   const SECONDS_IN_YEAR = 365 * 24 * 3600;
@@ -110,18 +114,15 @@ const formatDetailedTime = (minutes) => {
   remaining %= SECONDS_IN_HOUR;
 
   const mins = Math.floor(remaining / SECONDS_IN_MINUTE);
-  const secs = remaining % SECONDS_IN_MINUTE;
 
-  const parts = [
-    getPolishPlural(years, "rok", "lata", "lat"),
-    getPolishPlural(months, "miesiąc", "miesiące", "miesięcy"),
-    getPolishPlural(days, "dzień", "dni", "dni"),
-    getPolishPlural(hours, "godzina", "godziny", "godzin"),
-    getPolishPlural(mins, "minuta", "minuty", "minut"),
-    getPolishPlural(secs, "sekunda", "sekundy", "sekund")
-  ];
+  const parts = [];
+  if (years > 0) parts.push(getPolishPlural(years, "rok", "lata", "lat"));
+  if (months > 0) parts.push(getPolishPlural(months, "miesiąc", "miesiące", "miesięcy"));
+  if (days > 0) parts.push(getPolishPlural(days, "dzień", "dni", "dni"));
+  if (hours > 0) parts.push(getPolishPlural(hours, "godzina", "godziny", "godzin"));
+  if (mins > 0) parts.push(getPolishPlural(mins, "minuta", "minuty", "minut"));
 
-  return parts.join(", ");
+  return parts.length > 0 ? parts.join(", ") : "0 minut";
 };
 
 const parseDate = (value) => new Date(value);

@@ -37,10 +37,15 @@ const state = {
   query: "",
   platform: "all",
   range: "all",
+  dateFrom: "",
+  dateTo: "",
+  historySort: "date-desc",
+  visibleHistory: 50,
   usingImportedData: false,
 };
 
 const netflixDateLocale = "pl-PL";
+const historyPageSize = 50;
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -68,6 +73,47 @@ const formatCompactTime = (minutes) => {
 };
 
 const parseDate = (value) => new Date(value);
+
+const toDateKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateKey = (dateKey) => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(netflixDateLocale, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const getDateBounds = (data = watchHistory) => {
+  const dates = data
+    .map((item) => parseDate(item.watchedAt))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a - b);
+
+  if (!dates.length) {
+    return { min: "", max: "" };
+  }
+
+  return {
+    min: toDateKey(dates[0]),
+    max: toDateKey(dates[dates.length - 1]),
+  };
+};
+
+const addDays = (dateKey, amount) => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + amount);
+  return toDateKey(date);
+};
+
+const daysBetween = (from, to) => Math.floor((new Date(to) - new Date(from)) / (24 * 60 * 60 * 1000));
 
 const setImportStatus = (message, tone = "success") => {
   const status = document.querySelector("#netflixImportStatus");
@@ -153,6 +199,38 @@ const inferNetflixType = (title) => {
   return serialSignals.some((signal) => normalized.includes(signal)) ? "Serial" : "Film / odcinek";
 };
 
+const parseSeriesInfo = (title) => {
+  const cleanTitle = String(title ?? "").trim();
+  const seasonMatch = cleanTitle.match(/^(.*?):\s*(season|sezon|series|część)\s*(\d+)/i);
+  const episodeMatch = cleanTitle.match(/(?:episode|odcinek)\s*(\d+)/i);
+
+  if (seasonMatch) {
+    return {
+      series: seasonMatch[1].trim(),
+      season: Number(seasonMatch[3]),
+      episode: episodeMatch ? Number(episodeMatch[1]) : null,
+      isSeries: true,
+    };
+  }
+
+  const colonParts = cleanTitle.split(":").map((part) => part.trim()).filter(Boolean);
+  if (colonParts.length >= 3) {
+    return {
+      series: colonParts[0],
+      season: null,
+      episode: null,
+      isSeries: true,
+    };
+  }
+
+  return {
+    series: cleanTitle,
+    season: null,
+    episode: null,
+    isSeries: inferNetflixType(cleanTitle) === "Serial",
+  };
+};
+
 const estimateNetflixMinutes = (title, shouldEstimate) => {
   if (!shouldEstimate) {
     return 0;
@@ -174,6 +252,7 @@ const normalizeNetflixRows = (rows, shouldEstimate) =>
       }
 
       const cleanTitle = String(title).trim();
+      const seriesInfo = parseSeriesInfo(cleanTitle);
       return {
         title: cleanTitle,
         type: inferNetflixType(cleanTitle),
@@ -183,6 +262,9 @@ const normalizeNetflixRows = (rows, shouldEstimate) =>
         minutes: estimateNetflixMinutes(cleanTitle, shouldEstimate),
         estimated: shouldEstimate,
         source: "netflix-csv",
+        series: seriesInfo.series,
+        season: seriesInfo.season,
+        episode: seriesInfo.episode,
       };
     })
     .filter(Boolean);
@@ -198,14 +280,19 @@ const updateImportControls = () => {
 };
 
 const filteredByRange = () => {
-  if (state.range === "all") {
-    return watchHistory;
+  const bounds = getDateBounds();
+  let from = state.dateFrom;
+  let to = state.dateTo;
+
+  if (state.range !== "all" && state.range !== "custom" && bounds.max) {
+    to = bounds.max;
+    from = addDays(bounds.max, Number(state.range) * -1 + 1);
   }
 
-  const days = Number(state.range);
-  const latest = Math.max(...watchHistory.map((item) => parseDate(item.watchedAt).getTime()));
-  const cutoff = latest - days * 24 * 60 * 60 * 1000;
-  return watchHistory.filter((item) => parseDate(item.watchedAt).getTime() >= cutoff);
+  return watchHistory.filter((item) => {
+    const key = toDateKey(parseDate(item.watchedAt));
+    return (!from || key >= from) && (!to || key <= to);
+  });
 };
 
 const getHistoryResults = () => {
@@ -223,7 +310,180 @@ const getHistoryResults = () => {
         .toLowerCase()
         .includes(query);
     })
-    .sort((a, b) => parseDate(b.watchedAt) - parseDate(a.watchedAt));
+    .sort((a, b) => {
+      if (state.historySort === "date-asc") {
+        return parseDate(a.watchedAt) - parseDate(b.watchedAt);
+      }
+
+      if (state.historySort === "title-asc") {
+        return a.title.localeCompare(b.title, netflixDateLocale);
+      }
+
+      if (state.historySort === "minutes-desc") {
+        return b.minutes - a.minutes || parseDate(b.watchedAt) - parseDate(a.watchedAt);
+      }
+
+      return parseDate(b.watchedAt) - parseDate(a.watchedAt);
+    });
+};
+
+const getDayGroups = (data = filteredByRange()) => {
+  const groups = new Map();
+
+  data.forEach((item) => {
+    const key = toDateKey(parseDate(item.watchedAt));
+    const current = groups.get(key) || {
+      dateKey: key,
+      minutes: 0,
+      count: 0,
+      titles: new Set(),
+      items: [],
+    };
+    current.minutes += item.minutes;
+    current.count += 1;
+    current.titles.add(item.title);
+    current.items.push(item);
+    groups.set(key, current);
+  });
+
+  return [...groups.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+};
+
+const getSeriesGroups = (data = filteredByRange()) => {
+  const groups = new Map();
+
+  data.forEach((item) => {
+    const info = parseSeriesInfo(item.series || item.title);
+    const series = item.series || info.series;
+    const current = groups.get(series) || {
+      series,
+      minutes: 0,
+      count: 0,
+      firstDate: toDateKey(parseDate(item.watchedAt)),
+      lastDate: toDateKey(parseDate(item.watchedAt)),
+      days: new Set(),
+      episodes: new Set(),
+      items: [],
+      isSeries: info.isSeries || item.type === "Serial",
+    };
+    const key = toDateKey(parseDate(item.watchedAt));
+    const season = item.season ?? info.season ?? "?";
+    const episode = item.episode ?? info.episode ?? item.title;
+    current.minutes += item.minutes;
+    current.count += 1;
+    current.firstDate = current.firstDate < key ? current.firstDate : key;
+    current.lastDate = current.lastDate > key ? current.lastDate : key;
+    current.days.add(key);
+    current.episodes.add(`${season}:${episode}`);
+    current.items.push(item);
+    groups.set(series, current);
+  });
+
+  return [...groups.values()];
+};
+
+const getTopDays = () =>
+  getDayGroups()
+    .sort((a, b) => b.minutes - a.minutes || b.count - a.count)
+    .slice(0, 7);
+
+const getBingeSeries = () =>
+  getSeriesGroups()
+    .filter((group) => group.isSeries && (group.count >= 3 || group.days.size >= 2))
+    .map((group) => {
+      const sortedDays = [...group.days].sort();
+      let longestRun = 1;
+      let currentRun = 1;
+
+      for (let index = 1; index < sortedDays.length; index += 1) {
+        if (sortedDays[index] === addDays(sortedDays[index - 1], 1)) {
+          currentRun += 1;
+          longestRun = Math.max(longestRun, currentRun);
+        } else {
+          currentRun = 1;
+        }
+      }
+
+      const bestSingleDay = Math.max(
+        ...getDayGroups(group.items).map((day) => day.count),
+        0
+      );
+
+      return {
+        ...group,
+        longestRun,
+        bestSingleDay,
+      };
+    })
+    .filter((group) => group.longestRun >= 2 || group.bestSingleDay >= 3)
+    .sort((a, b) => b.longestRun - a.longestRun || b.bestSingleDay - a.bestSingleDay || b.count - a.count)
+    .slice(0, 7);
+
+const getAbandonedSeries = () => {
+  const bounds = getDateBounds(filteredByRange());
+  const latest = bounds.max;
+
+  if (!latest) {
+    return [];
+  }
+
+  return getSeriesGroups()
+    .filter((group) => group.isSeries && group.count >= 1 && group.count <= 8)
+    .map((group) => {
+      const daysSinceLast = Math.floor((new Date(latest) - new Date(group.lastDate)) / (24 * 60 * 60 * 1000));
+      return {
+        ...group,
+        daysSinceLast,
+      };
+    })
+    .filter((group) => group.daysSinceLast >= 30)
+    .sort((a, b) => b.daysSinceLast - a.daysSinceLast || b.count - a.count)
+    .slice(0, 7);
+};
+
+const getTopSeries = () =>
+  getSeriesGroups()
+    .sort((a, b) => b.count - a.count || b.minutes - a.minutes)
+    .slice(0, 7);
+
+const getCalendarDays = () => {
+  const groups = getDayGroups();
+  const bounds = getDateBounds(filteredByRange());
+
+  if (!bounds.min || !bounds.max) {
+    return [];
+  }
+
+  const days = [];
+  const start = daysBetween(bounds.min, bounds.max) > 369 ? addDays(bounds.max, -369) : bounds.min;
+  let current = start;
+
+  while (current <= bounds.max) {
+    const group = groups.find((entry) => entry.dateKey === current);
+    days.push(group || { dateKey: current, minutes: 0, count: 0, titles: new Set(), items: [] });
+    current = addDays(current, 1);
+  }
+
+  return days;
+};
+
+const updateDateInputs = () => {
+  const bounds = getDateBounds();
+  const fromInput = document.querySelector("#dateFrom");
+  const toInput = document.querySelector("#dateTo");
+  [fromInput, toInput].forEach((input) => {
+    input.min = bounds.min;
+    input.max = bounds.max;
+  });
+  fromInput.value = state.dateFrom;
+  toInput.value = state.dateTo;
+  document.querySelector("#rangeFilter").value = state.range;
+  document.querySelector("#activeRangeLabel").textContent =
+    state.dateFrom || state.dateTo
+      ? `${state.dateFrom || bounds.min || "-"} - ${state.dateTo || bounds.max || "-"}`
+      : state.range === "all"
+        ? "Cała historia"
+        : `Ostatnie ${state.range} dni`;
 };
 
 const renderMetrics = () => {
@@ -231,18 +491,15 @@ const renderMetrics = () => {
   const totalMinutes = data.reduce((sum, item) => sum + item.minutes, 0);
   const uniqueTitles = new Set(data.map((item) => item.title)).size;
   const dates = data.map((item) => parseDate(item.watchedAt)).sort((a, b) => a - b);
-  const hours = data.reduce((acc, item) => {
-    const hour = parseDate(item.watchedAt).getHours();
-    const bucket = hour < 12 ? "rano" : hour < 18 ? "po południu" : hour < 22 ? "wieczorem" : "nocą";
-    acc[bucket] = (acc[bucket] || 0) + 1;
-    return acc;
-  }, {});
-  const peakTime = Object.entries(hours).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
+  const longestDay = getTopDays()[0];
 
   const hasEstimatedTime = data.some((item) => item.estimated);
   document.querySelector("#totalHours").textContent = `${formatHours(totalMinutes)}${hasEstimatedTime ? "*" : ""}`;
   document.querySelector("#sessionCount").textContent = data.length.toString();
-  document.querySelector("#peakTime").textContent = peakTime;
+  document.querySelector("#peakTime").textContent = longestDay ? formatCompactTime(longestDay.minutes) : "-";
+  document.querySelector("#peakTimeNote").textContent = longestDay
+    ? `${formatDateKey(longestDay.dateKey)}, ${longestDay.count} wpisów`
+    : "brak danych";
   document.querySelector("#uniqueTitles").textContent = uniqueTitles.toString();
   document.querySelector("#watchSpan").textContent = dates.length
     ? `${dates[0].toLocaleDateString(netflixDateLocale)} - ${dates[dates.length - 1].toLocaleDateString(netflixDateLocale)}`
@@ -273,26 +530,97 @@ const renderPlatformBars = () => {
     .join("");
 };
 
-const renderHeatmap = () => {
-  const totals = filteredByRange().reduce((acc, item) => {
-    const day = parseDate(item.watchedAt).getDay();
-    acc[day] = (acc[day] || 0) + item.minutes;
-    return acc;
-  }, {});
-  const max = Math.max(...Object.values(totals), 1);
+const renderCalendar = () => {
+  const days = getCalendarDays();
+  const max = Math.max(...days.map((day) => day.minutes), 1);
+  const grid = document.querySelector("#calendarGrid");
 
-  document.querySelector("#weekHeatmap").innerHTML = dayNames
-    .map((name, index) => {
-      const minutes = totals[index] || 0;
-      const heat = Math.round((minutes / max) * 72);
+  if (!days.length) {
+    grid.innerHTML = `<div class="empty-state">Brak danych w wybranym zakresie.</div>`;
+    return;
+  }
+
+  grid.innerHTML = days
+    .map((day) => {
+      const heat = Math.round((day.minutes / max) * 82);
+      const date = new Date(day.dateKey);
       return `
-        <div class="day-cell" style="--heat-color: #0e9384; --heat: ${heat}%">
-          <strong>${escapeHtml(name)}</strong>
-          <span>${minutes ? formatCompactTime(minutes) : "0m"}</span>
-        </div>
+        <button class="calendar-day" type="button" data-date="${day.dateKey}" style="--heat: ${heat}%">
+          <strong>${date.getDate()}</strong>
+          <span>${day.minutes ? formatCompactTime(day.minutes) : ""}</span>
+        </button>
       `;
     })
     .join("");
+};
+
+const renderInsightList = (selector, rows, emptyMessage, renderRow) => {
+  const container = document.querySelector(selector);
+  container.innerHTML = rows.length
+    ? rows.map(renderRow).join("")
+    : `<div class="empty-state">${emptyMessage}</div>`;
+};
+
+const renderInsights = () => {
+  renderInsightList(
+    "#topDaysList",
+    getTopDays(),
+    "Brak dni do pokazania w wybranym zakresie.",
+    (day) => `
+      <article class="insight-item">
+        <div>
+          <strong>${escapeHtml(formatDateKey(day.dateKey))}</strong>
+          <span>${day.count} wpisów, ${day.titles.size} unikalnych tytułów</span>
+        </div>
+        <b>${formatHours(day.minutes)}</b>
+      </article>
+    `
+  );
+
+  renderInsightList(
+    "#bingeList",
+    getBingeSeries(),
+    "Nie wykryto jeszcze wyraźnych ciągów oglądania.",
+    (group) => `
+      <article class="insight-item">
+        <div>
+          <strong>${escapeHtml(group.series)}</strong>
+          <span>${group.count} wpisów, najlepszy dzień: ${group.bestSingleDay}, ciąg: ${group.longestRun} dni</span>
+        </div>
+        <b>${formatHours(group.minutes)}</b>
+      </article>
+    `
+  );
+
+  renderInsightList(
+    "#abandonedList",
+    getAbandonedSeries(),
+    "Brak mocnych sygnałów porzuconych seriali w tym zakresie.",
+    (group) => `
+      <article class="insight-item">
+        <div>
+          <strong>${escapeHtml(group.series)}</strong>
+          <span>${group.count} wpisów, ostatnio ${group.daysSinceLast} dni temu</span>
+        </div>
+        <b>${escapeHtml(formatDateKey(group.lastDate))}</b>
+      </article>
+    `
+  );
+
+  renderInsightList(
+    "#seriesList",
+    getTopSeries(),
+    "Brak tytułów do pokazania.",
+    (group) => `
+      <article class="insight-item">
+        <div>
+          <strong>${escapeHtml(group.series)}</strong>
+          <span>${group.count} wpisów, ${group.days.size} dni aktywności</span>
+        </div>
+        <b>${formatHours(group.minutes)}</b>
+      </article>
+    `
+  );
 };
 
 const renderFilters = () => {
@@ -311,13 +639,18 @@ const renderFilters = () => {
 const renderHistory = () => {
   const results = getHistoryResults();
   const list = document.querySelector("#historyList");
+  const visibleResults = results.slice(0, state.visibleHistory);
+  const loadMoreButton = document.querySelector("#loadMoreHistory");
+
+  document.querySelector("#historyCount").textContent = `${results.length} wpisów`;
+  loadMoreButton.hidden = results.length <= state.visibleHistory;
 
   if (!results.length) {
     list.innerHTML = `<div class="empty-state">Nie znaleziono pasujących wpisów w historii oglądania.</div>`;
     return;
   }
 
-  list.innerHTML = results
+  list.innerHTML = visibleResults
     .map((item) => {
       const date = parseDate(item.watchedAt);
       return `
@@ -353,9 +686,11 @@ const renderCoverage = () => {
 };
 
 const renderAll = () => {
+  updateDateInputs();
   renderMetrics();
   renderPlatformBars();
-  renderHeatmap();
+  renderCalendar();
+  renderInsights();
   renderFilters();
   renderHistory();
   renderCoverage();
@@ -364,12 +699,65 @@ const renderAll = () => {
 
 document.querySelector("#historySearch").addEventListener("input", (event) => {
   state.query = event.target.value;
+  state.visibleHistory = historyPageSize;
   renderHistory();
 });
 
 document.querySelector("#rangeFilter").addEventListener("change", (event) => {
   state.range = event.target.value;
+  if (state.range !== "custom") {
+    state.dateFrom = "";
+    state.dateTo = "";
+  }
+  state.visibleHistory = historyPageSize;
   renderAll();
+});
+
+document.querySelector("#dateFrom").addEventListener("change", (event) => {
+  state.dateFrom = event.target.value;
+  state.range = "custom";
+  state.visibleHistory = historyPageSize;
+  renderAll();
+});
+
+document.querySelector("#dateTo").addEventListener("change", (event) => {
+  state.dateTo = event.target.value;
+  state.range = "custom";
+  state.visibleHistory = historyPageSize;
+  renderAll();
+});
+
+document.querySelector("#clearDateFilters").addEventListener("click", () => {
+  state.dateFrom = "";
+  state.dateTo = "";
+  state.range = "all";
+  state.visibleHistory = historyPageSize;
+  renderAll();
+});
+
+document.querySelector("#historySort").addEventListener("change", (event) => {
+  state.historySort = event.target.value;
+  state.visibleHistory = historyPageSize;
+  renderHistory();
+});
+
+document.querySelector("#loadMoreHistory").addEventListener("click", () => {
+  state.visibleHistory += historyPageSize;
+  renderHistory();
+});
+
+document.querySelector("#calendarGrid").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-date]");
+  if (!button) {
+    return;
+  }
+
+  state.dateFrom = button.dataset.date;
+  state.dateTo = button.dataset.date;
+  state.range = "custom";
+  state.visibleHistory = historyPageSize;
+  renderAll();
+  document.querySelector("#historia").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 document.querySelector(".filter-row").addEventListener("click", (event) => {
@@ -379,6 +767,7 @@ document.querySelector(".filter-row").addEventListener("click", (event) => {
   }
 
   state.platform = button.dataset.platform;
+  state.visibleHistory = historyPageSize;
   renderFilters();
   renderHistory();
 });
@@ -404,8 +793,13 @@ document.querySelector("#netflixCsvInput").addEventListener("change", async (eve
     state.usingImportedData = true;
     state.platform = "all";
     state.range = "all";
+    state.dateFrom = "";
+    state.dateTo = "";
     state.query = "";
+    state.historySort = "date-desc";
+    state.visibleHistory = historyPageSize;
     document.querySelector("#historySearch").value = "";
+    document.querySelector("#historySort").value = state.historySort;
 
     const estimatedNote = shouldEstimate
       ? " Czas jest szacowany, bo Netflix nie podaje pełnej długości sesji w tym eksporcie."
@@ -450,15 +844,20 @@ document.querySelector("#clearImportedData").addEventListener("click", () => {
   state.usingImportedData = false;
   state.platform = "all";
   state.range = "all";
+  state.dateFrom = "";
+  state.dateTo = "";
   state.query = "";
+  state.historySort = "date-desc";
+  state.visibleHistory = historyPageSize;
   document.querySelector("#historySearch").value = "";
   document.querySelector("#rangeFilter").value = "all";
+  document.querySelector("#historySort").value = state.historySort;
   setImportStatus("Dane z importu zostały wyczyszczone z pamięci karty. Wróciły dane przykładowe.");
   renderAll();
 });
 
-renderAll();
-
-window.StreamWrapped = Object.freeze({
+globalThis.StreamWrapped = Object.freeze({
   importNetflixCsvText,
 });
+
+renderAll();

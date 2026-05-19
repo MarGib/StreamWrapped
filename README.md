@@ -37,6 +37,15 @@ Flow:
 
 Important limitation: Netflix viewing activity CSV exposes titles and watch dates. It does not provide exact watch duration per session, so StreamWrapped marks imported Netflix time as estimated when estimation is enabled.
 
+The Netflix analytics view keeps large histories manageable with:
+
+- date filters for a single day or custom range
+- a compact day-by-day activity calendar
+- longest viewing days
+- likely binge sessions based on repeated series entries in a day or across consecutive days
+- likely abandoned series based on older unfinished-looking series activity
+- capped history rendering with sorting and "load more"
+
 ## Initial Platform Targets
 
 - Netflix

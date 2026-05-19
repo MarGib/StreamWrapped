@@ -19,6 +19,7 @@
 
         <nav class="nav-list" aria-label="Sekcje">
           <a href="#raport" class="active">Raport</a>
+          <a href="#analizy">Analizy</a>
           <a href="#historia">Historia</a>
           <a href="#platformy">Platformy</a>
           <a href="#import">Import</a>
@@ -54,15 +55,46 @@
             <p>odcinki, filmy i wydarzenia</p>
           </article>
           <article class="metric-card">
-            <span>Najaktywniejsza pora</span>
+            <span>Najdłuższy dzień</span>
             <strong id="peakTime">-</strong>
-            <p>na podstawie godzin startu</p>
+            <p id="peakTimeNote">najwięcej wpisów/czasu</p>
           </article>
           <article class="metric-card">
             <span>Unikalne tytuły</span>
             <strong id="uniqueTitles">0</strong>
             <p>w całej historii</p>
           </article>
+        </section>
+
+        <section id="analizy" class="panel controls-panel" aria-labelledby="filtersTitle">
+          <div class="panel-heading controls-heading">
+            <div>
+              <p class="eyebrow">Zakres danych</p>
+              <h2 id="filtersTitle">Wybierz dzień albo okres</h2>
+            </div>
+            <div id="activeRangeLabel" class="range-label">Cała historia</div>
+          </div>
+          <div class="date-controls">
+            <label>
+              <span>Od</span>
+              <input id="dateFrom" type="date">
+            </label>
+            <label>
+              <span>Do</span>
+              <input id="dateTo" type="date">
+            </label>
+            <label>
+              <span>Szybki zakres</span>
+              <select id="rangeFilter" aria-label="Zakres czasu">
+                <option value="all">Cała historia</option>
+                <option value="365">Ostatni rok</option>
+                <option value="90">Ostatnie 90 dni</option>
+                <option value="30">Ostatnie 30 dni</option>
+                <option value="custom">Własny zakres</option>
+              </select>
+            </label>
+            <button id="clearDateFilters" class="secondary-button" type="button">Wyczyść zakres</button>
+          </div>
         </section>
 
         <section class="content-grid">
@@ -72,11 +104,6 @@
                 <p class="eyebrow">Platformy</p>
                 <h2 id="platformChartTitle">Gdzie uciekł czas</h2>
               </div>
-              <select id="rangeFilter" aria-label="Zakres czasu">
-                <option value="all">Cała historia</option>
-                <option value="90">Ostatnie 90 dni</option>
-                <option value="30">Ostatnie 30 dni</option>
-              </select>
             </div>
             <div id="platformBars" class="bars" aria-live="polite"></div>
           </article>
@@ -84,11 +111,55 @@
           <article class="panel calendar-panel" aria-labelledby="calendarTitle">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Kiedy</p>
-                <h2 id="calendarTitle">Rytm oglądania</h2>
+                <p class="eyebrow">Kalendarz</p>
+                <h2 id="calendarTitle">Aktywność po dniach</h2>
               </div>
             </div>
-            <div id="weekHeatmap" class="heatmap" aria-label="Aktywność według dni tygodnia"></div>
+            <div id="calendarGrid" class="calendar-grid" aria-label="Aktywność według dni"></div>
+          </article>
+        </section>
+
+        <section class="content-grid insights-grid">
+          <article class="panel" aria-labelledby="topDaysTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Najdłużej</p>
+                <h2 id="topDaysTitle">Dni z największym oglądaniem</h2>
+              </div>
+            </div>
+            <div id="topDaysList" class="insight-list"></div>
+          </article>
+
+          <article class="panel" aria-labelledby="bingeTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Ciągi</p>
+                <h2 id="bingeTitle">Seriale oglądane jednym ciągiem</h2>
+              </div>
+            </div>
+            <div id="bingeList" class="insight-list"></div>
+          </article>
+        </section>
+
+        <section class="content-grid insights-grid">
+          <article class="panel" aria-labelledby="abandonedTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Do powrotu</p>
+                <h2 id="abandonedTitle">Prawdopodobnie porzucone seriale</h2>
+              </div>
+            </div>
+            <div id="abandonedList" class="insight-list"></div>
+          </article>
+
+          <article class="panel" aria-labelledby="seriesTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Serie</p>
+                <h2 id="seriesTitle">Najczęściej oglądane tytuły</h2>
+              </div>
+            </div>
+            <div id="seriesList" class="insight-list"></div>
           </article>
         </section>
 
@@ -103,10 +174,23 @@
               <input id="historySearch" type="search" placeholder="Tytuł, platforma, gatunek..." autocomplete="off">
             </label>
           </div>
+          <div class="history-tools">
+            <span id="historyCount" class="history-count">0 wpisów</span>
+            <label>
+              <span>Sortowanie</span>
+              <select id="historySort" aria-label="Sortowanie historii">
+                <option value="date-desc">Najnowsze najpierw</option>
+                <option value="date-asc">Najstarsze najpierw</option>
+                <option value="title-asc">Tytuł A-Z</option>
+                <option value="minutes-desc">Najdłuższe najpierw</option>
+              </select>
+            </label>
+          </div>
           <div class="filter-row" role="group" aria-label="Filtr platform">
             <button class="filter-chip active" data-platform="all" type="button">Wszystkie</button>
           </div>
           <div id="historyList" class="history-list" aria-live="polite"></div>
+          <button id="loadMoreHistory" class="secondary-button load-more" type="button">Pokaż więcej</button>
         </section>
 
         <section class="content-grid lower-grid">
@@ -183,6 +267,6 @@
       </main>
     </div>
 
-    <script src="app.js?v=netflix-connector"></script>
+    <script src="app.js?v=netflix-analytics"></script>
   </body>
 </html>

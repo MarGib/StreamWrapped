@@ -1623,8 +1623,8 @@ const renderStory = () => {
   const tenureText = firstDate ? getSpanDescription(firstDate, new Date()) : "-";
   const elapsed = story.totalDays ? `${story.totalDays} dni historii, ${story.activeDays} dni aktywnych` : "0 dni historii";
   
-  const watched = `${formatHours(story.totalMinutes)}${hasEstimate ? "*" : ""}`;
-  const detailedTime = formatDetailedTime(story.totalMinutes);
+  const watched = `${formatDetailedTime(story.totalMinutes)}`;
+  const detailedTime = `Łącznie: ${formatHours(story.totalMinutes)}${hasEstimate ? "*" : ""}`;
 
   document.querySelector("#storyPlatform").textContent = story.platformCount === 1 ? story.platform : `Top: ${story.platform}`;
   document.querySelector("#storySince").textContent = story.platformCount === 1

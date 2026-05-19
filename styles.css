@@ -892,24 +892,26 @@ select {
 }
 
 .share-hero h2 {
-  margin: 8px 0 4px 0;
-  font-size: clamp(48px, 10vw, 84px);
-  line-height: 0.95;
-  font-weight: 900;
-  letter-spacing: -0.03em;
+  margin: 12px 0 8px 0;
+  font-size: clamp(24px, 5.2vw, 42px);
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: white;
-  background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  word-break: keep-all;
 }
 
 .share-time-detail {
-  font-size: clamp(13px, 1.8vw, 16px);
+  font-size: clamp(14px, 2.2vw, 18px);
   line-height: 1.4;
-  font-weight: 500;
+  font-weight: 700;
   color: #a5f3fc;
   margin-bottom: 16px;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .share-stats {

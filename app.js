@@ -1614,15 +1614,24 @@ const renderStory = () => {
   const story = getStoryStats();
   const data = filteredByRange();
   const hasEstimate = data.some((item) => item.estimated);
-  const since = story.bounds.min ? formatDateKey(story.bounds.min) : "-";
+  
+  const dates = data.map((item) => parseDate(item.watchedAt)).sort((a, b) => a - b);
+  const firstDate = dates[0];
+  const lastDate = dates[dates.length - 1];
+
+  const since = firstDate ? formatPolishDateStr(firstDate, false) : "-";
+  const tenureText = firstDate ? getSpanDescription(firstDate, new Date()) : "-";
   const elapsed = story.totalDays ? `${story.totalDays} dni historii, ${story.activeDays} dni aktywnych` : "0 dni historii";
-  const watched = `${formatDetailedTime(story.totalMinutes)}${hasEstimate ? "*" : ""}`;
+  
+  const watched = `${formatHours(story.totalMinutes)}${hasEstimate ? "*" : ""}`;
+  const detailedTime = formatDetailedTime(story.totalMinutes);
 
   document.querySelector("#storyPlatform").textContent = story.platformCount === 1 ? story.platform : `Top: ${story.platform}`;
   document.querySelector("#storySince").textContent = story.platformCount === 1
-    ? `Jesteś użytkownikiem ${story.platform} od ${since}`
-    : `Twoja historia oglądania zaczyna się ${since}`;
+    ? `W ${story.platform} od ${since} • Staż: ${tenureText}`
+    : `Historia od ${since} • Staż: ${tenureText}`;
   document.querySelector("#storyWatched").textContent = watched;
+  document.querySelector("#storyTimeDetail").textContent = detailedTime;
   document.querySelector("#storyElapsed").textContent = elapsed;
   document.querySelector("#storyHookTitle").textContent = story.topSeries?.series || "-";
   document.querySelector("#storyHookDetail").textContent = story.topSeries
@@ -1663,10 +1672,6 @@ const renderStory = () => {
     podstawowy: "Podstawowy"
   };
   
-  const dates = data.map((item) => parseDate(item.watchedAt)).sort((a, b) => a - b);
-  const firstDate = dates[0];
-  const lastDate = dates[dates.length - 1];
-  
   // Calculate gaps
   const GAP_THRESHOLD_MS = 30 * 24 * 3600 * 1000;
   const gaps = [];
@@ -1703,6 +1708,7 @@ const renderStory = () => {
   let lifePercentageDetail = null;
 
   if (birthDateValue && data.length) {
+    const birthDate = new Date(birthDateValue);
     const referenceDate = lastDate > new Date() ? lastDate : new Date();
     const lifespanMs = referenceDate - birthDate;
     

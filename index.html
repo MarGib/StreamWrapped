@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>StreamWrapped</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Nawigacja">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">SW</div>
+          <div>
+            <strong>StreamWrapped</strong>
+            <span>Historia streamingu</span>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Sekcje">
+          <a href="#raport" class="active">Raport</a>
+          <a href="#historia">Historia</a>
+          <a href="#platformy">Platformy</a>
+          <a href="#import">Import</a>
+        </nav>
+
+        <section class="privacy-note">
+          <span class="note-label">Prywatność</span>
+          <p>Dane oglądania powinny być przetwarzane lokalnie lub po wyraźnej zgodzie użytkownika.</p>
+        </section>
+      </aside>
+
+      <main>
+        <section class="topbar" aria-label="Podsumowanie konta">
+          <div>
+            <p class="eyebrow">MVP produktu</p>
+            <h1>Jeden raport dla całej historii oglądania</h1>
+          </div>
+          <div class="account-pill" aria-label="Tryb demonstracyjny">
+            <span class="status-dot"></span>
+            Dane przykładowe
+          </div>
+        </section>
+
+        <section id="raport" class="report-grid" aria-label="Raport oglądania">
+          <article class="metric-card primary">
+            <span>Czas przed ekranem</span>
+            <strong id="totalHours">0 h</strong>
+            <p id="watchSpan">Zakres historii</p>
+          </article>
+          <article class="metric-card">
+            <span>Sesje</span>
+            <strong id="sessionCount">0</strong>
+            <p>odcinki, filmy i wydarzenia</p>
+          </article>
+          <article class="metric-card">
+            <span>Najaktywniejsza pora</span>
+            <strong id="peakTime">-</strong>
+            <p>na podstawie godzin startu</p>
+          </article>
+          <article class="metric-card">
+            <span>Unikalne tytuły</span>
+            <strong id="uniqueTitles">0</strong>
+            <p>w całej historii</p>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel watch-chart" aria-labelledby="platformChartTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Platformy</p>
+                <h2 id="platformChartTitle">Gdzie uciekł czas</h2>
+              </div>
+              <select id="rangeFilter" aria-label="Zakres czasu">
+                <option value="all">Cała historia</option>
+                <option value="90">Ostatnie 90 dni</option>
+                <option value="30">Ostatnie 30 dni</option>
+              </select>
+            </div>
+            <div id="platformBars" class="bars" aria-live="polite"></div>
+          </article>
+
+          <article class="panel calendar-panel" aria-labelledby="calendarTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Kiedy</p>
+                <h2 id="calendarTitle">Rytm oglądania</h2>
+              </div>
+            </div>
+            <div id="weekHeatmap" class="heatmap" aria-label="Aktywność według dni tygodnia"></div>
+          </article>
+        </section>
+
+        <section id="historia" class="panel history-panel" aria-labelledby="historyTitle">
+          <div class="panel-heading history-heading">
+            <div>
+              <p class="eyebrow">Wyszukiwarka</p>
+              <h2 id="historyTitle">Sprawdź, czy już było oglądane</h2>
+            </div>
+            <label class="search-box">
+              <span>🔎</span>
+              <input id="historySearch" type="search" placeholder="Tytuł, platforma, gatunek..." autocomplete="off">
+            </label>
+          </div>
+          <div class="filter-row" role="group" aria-label="Filtr platform">
+            <button class="filter-chip active" data-platform="all" type="button">Wszystkie</button>
+          </div>
+          <div id="historyList" class="history-list" aria-live="polite"></div>
+        </section>
+
+        <section class="content-grid lower-grid">
+          <article id="platformy" class="panel" aria-labelledby="coverageTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Roadmapa</p>
+                <h2 id="coverageTitle">Platformy do obsłużenia</h2>
+              </div>
+            </div>
+            <div id="platformCoverage" class="coverage-list"></div>
+          </article>
+
+          <article id="import" class="panel import-panel" aria-labelledby="importTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Dane</p>
+                <h2 id="importTitle">Bezpieczny import</h2>
+              </div>
+            </div>
+            <ol class="import-steps">
+              <li>
+                <strong>Połącz lub zaimportuj</strong>
+                <span>Eksport konta, API/OAuth, rozszerzenie przeglądarki albo plik CSV/JSON.</span>
+              </li>
+              <li>
+                <strong>Normalizuj historię</strong>
+                <span>Każdy wpis trafia do wspólnego schematu: tytuł, platforma, czas, data, typ.</span>
+              </li>
+              <li>
+                <strong>Raportuj lokalnie</strong>
+                <span>Podsumowania, wyszukiwarka i rekomendacje bez zbędnego wysyłania danych.</span>
+              </li>
+            </ol>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

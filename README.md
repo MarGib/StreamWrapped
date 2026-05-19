@@ -1,0 +1,61 @@
+# StreamWrapped
+
+StreamWrapped is a privacy-first dashboard for collecting and exploring a user's streaming watch history across platforms.
+
+The first version is a static prototype that shows the core product direction:
+
+- consolidated watch history across streaming services
+- total screen time, session patterns, and most-watched platforms
+- searchable viewing history
+- platform coverage roadmap
+- import-first data model that avoids storing streaming passwords
+
+## Product Approach
+
+The safest long-term approach is to support every platform through the least invasive method available:
+
+1. Official export/import when a provider exposes account data downloads.
+2. OAuth or official APIs where available.
+3. User-assisted browser extension capture for platforms without exports, with clear consent and local processing.
+4. Manual CSV/JSON import as a fallback.
+
+The app should not ask users for streaming account passwords directly. If login is needed, it should happen inside the provider's own page or through a browser extension flow where credentials are never collected by StreamWrapped.
+
+## Initial Platform Targets
+
+- Netflix
+- Amazon Prime Video
+- Max / HBO Max
+- Disney+
+- Canal+
+- SkyShowtime
+- Apple TV+
+- YouTube
+- Player / TVN
+- Polsat Box Go
+
+## Run The Prototype
+
+Open `index.html` in a browser, or run a local server:
+
+```sh
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000`.
+
+## GitHub Pages
+
+The repository is configured for GitHub Pages through `.github/workflows/pages.yml`.
+
+Every push to `main` publishes the static site automatically. The workflow can also be started manually from the GitHub Actions tab.
+
+After the GitHub repository exists, set Pages source to **GitHub Actions** in repository settings if GitHub does not enable it automatically after the first successful deployment.
+
+## Next Build Steps
+
+1. Add a normalized watch-history schema.
+2. Build import adapters for downloadable platform files.
+3. Add local-first storage with explicit user consent.
+4. Add authentication only through provider-owned flows or a browser extension.
+5. Replace sample data with imported user data.

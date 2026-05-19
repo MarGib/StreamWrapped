@@ -45,6 +45,42 @@
           </div>
         </section>
 
+        <section id="import" class="panel import-panel import-top-panel" aria-labelledby="importTitle">
+          <div class="panel-heading import-heading">
+            <div>
+              <p class="eyebrow">Netflix</p>
+              <h2 id="importTitle">Wczytaj historię oglądania</h2>
+            </div>
+            <label class="file-button prominent-file-button">
+              Wybierz CSV
+              <input id="netflixCsvInput" type="file" accept=".csv,text/csv">
+            </label>
+          </div>
+          <div class="netflix-import">
+            <div class="connector-card">
+              <div>
+                <strong>1. Pobierz historię z Netflixa</strong>
+                <p>Otwórz aktywność profilu w Netflixie i pobierz całą listę jako CSV.</p>
+              </div>
+              <a class="text-button" href="https://www.netflix.com/viewingactivity" target="_blank" rel="noreferrer">Otwórz Netflix</a>
+            </div>
+
+            <label class="checkbox-row">
+              <input id="estimateNetflixTime" type="checkbox" checked>
+              <span>Szacuj czas oglądania. Netflix CSV podaje datę i tytuł, ale nie podaje godziny ani realnej długości sesji.</span>
+            </label>
+
+            <div id="netflixImportStatus" class="import-status" role="status" aria-live="polite">
+              Gotowe na import pliku CSV z Netflixa.
+            </div>
+
+            <div class="button-row">
+              <button id="downloadLocalSnapshot" class="secondary-button" type="button" disabled>Pobierz lokalny JSON</button>
+              <button id="clearImportedData" class="secondary-button danger" type="button" disabled>Wyczyść z pamięci</button>
+            </div>
+          </div>
+        </section>
+
         <section id="raport" class="report-grid" aria-label="Raport oglądania">
           <article class="metric-card primary">
             <span>Czas przed ekranem</span>
@@ -289,70 +325,10 @@
             </div>
             <div id="platformCoverage" class="coverage-list"></div>
           </article>
-
-          <article id="import" class="panel import-panel" aria-labelledby="importTitle">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Netflix</p>
-                <h2 id="importTitle">Import bez przechowywania</h2>
-              </div>
-            </div>
-            <div class="netflix-import">
-              <div class="connector-card">
-                <div>
-                  <strong>1. Pobierz historię z Netflixa</strong>
-                  <p>Otwórz aktywność profilu w Netflixie i wybierz opcję pobrania całej listy jako CSV.</p>
-                </div>
-                <a class="text-button" href="https://www.netflix.com/viewingactivity" target="_blank" rel="noreferrer">Otwórz Netflix</a>
-              </div>
-
-              <div class="connector-card">
-                <div>
-                  <strong>2. Wczytaj plik lokalnie</strong>
-                  <p>Plik zostaje w tej karcie przeglądarki. Aplikacja nie wysyła go na serwer i nie zapisuje automatycznie.</p>
-                </div>
-                <label class="file-button">
-                  Wybierz CSV
-                  <input id="netflixCsvInput" type="file" accept=".csv,text/csv">
-                </label>
-              </div>
-
-              <label class="checkbox-row">
-                <input id="estimateNetflixTime" type="checkbox" checked>
-                <span>Szacuj czas oglądania, bo Netflix CSV podaje historię tytułów i daty, ale nie pełny czas sesji.</span>
-              </label>
-
-              <div id="netflixImportStatus" class="import-status" role="status" aria-live="polite">
-                Gotowe na import pliku CSV z Netflixa.
-              </div>
-
-              <div class="button-row">
-                <button id="downloadLocalSnapshot" class="secondary-button" type="button" disabled>Pobierz lokalny JSON</button>
-                <button id="clearImportedData" class="secondary-button danger" type="button" disabled>Wyczyść z pamięci</button>
-              </div>
-            </div>
-
-            <div class="divider"></div>
-
-            <ol class="import-steps">
-              <li>
-                <strong>Połącz lub zaimportuj</strong>
-                <span>Eksport konta, API/OAuth, rozszerzenie przeglądarki albo plik CSV/JSON.</span>
-              </li>
-              <li>
-                <strong>Normalizuj historię</strong>
-                <span>Każdy wpis trafia do wspólnego schematu: tytuł, platforma, czas, data, typ.</span>
-              </li>
-              <li>
-                <strong>Raportuj lokalnie</strong>
-                <span>Podsumowania, wyszukiwarka i rekomendacje bez zbędnego wysyłania danych.</span>
-              </li>
-            </ol>
-          </article>
         </section>
       </main>
     </div>
 
-    <script src="app.js?v=story-dashboard"></script>
+    <script src="app.js?v=date-only-import"></script>
   </body>
 </html>

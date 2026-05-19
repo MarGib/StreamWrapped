@@ -92,6 +92,17 @@ const formatDateKey = (dateKey) => {
   });
 };
 
+const formatWatchedDate = (item) => {
+  const date = parseDate(item.watchedAt);
+  const dateLabel = date.toLocaleDateString(netflixDateLocale);
+
+  if (item.hasTime === false) {
+    return dateLabel;
+  }
+
+  return `${dateLabel} ${date.toLocaleTimeString(netflixDateLocale, { hour: "2-digit", minute: "2-digit" })}`;
+};
+
 const getDateBounds = (data = watchHistory) => {
   const dates = data
     .map((item) => parseDate(item.watchedAt))
@@ -176,7 +187,10 @@ const parseNetflixDate = (value) => {
 
   const isoMatch = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if (isoMatch) {
-    return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]), 20, 0, 0);
+    return {
+      date: new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]), 12, 0, 0),
+      hasTime: false,
+    };
   }
 
   const localizedMatch = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
@@ -188,11 +202,21 @@ const parseNetflixDate = (value) => {
     const day = first > 12 ? first : second > 12 ? second : first;
     const month = first > 12 ? second : second > 12 ? first : second;
 
-    return new Date(year, month - 1, day, 20, 0, 0);
+    return {
+      date: new Date(year, month - 1, day, 12, 0, 0),
+      hasTime: false,
+    };
   }
 
   const fallback = new Date(raw);
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
+  if (Number.isNaN(fallback.getTime())) {
+    return null;
+  }
+
+  return {
+    date: fallback,
+    hasTime: /\d{1,2}:\d{2}/.test(raw),
+  };
 };
 
 const inferNetflixType = (title) => {
@@ -247,9 +271,9 @@ const normalizeNetflixRows = (rows, shouldEstimate) =>
       const title = row.title || row.tytuł || row.tytul || row.titel || row.titre || row.título || Object.values(row)[0];
       const watchedDate =
         row.date || row.data || row.datum || row.fecha || row["watch date"] || row["view date"] || Object.values(row)[1];
-      const parsedDate = parseNetflixDate(watchedDate);
+      const parsedDateResult = parseNetflixDate(watchedDate);
 
-      if (!title || !parsedDate) {
+      if (!title || !parsedDateResult) {
         return null;
       }
 
@@ -260,7 +284,8 @@ const normalizeNetflixRows = (rows, shouldEstimate) =>
         type: inferNetflixType(cleanTitle),
         platform: "Netflix",
         genre: shouldEstimate ? "Import Netflix, czas szacowany" : "Import Netflix, czas nieznany",
-        watchedAt: parsedDate.toISOString(),
+        watchedAt: parsedDateResult.date.toISOString(),
+        hasTime: parsedDateResult.hasTime,
         minutes: estimateNetflixMinutes(cleanTitle, shouldEstimate),
         estimated: shouldEstimate,
         source: "netflix-csv",
@@ -482,11 +507,11 @@ const getRepeatTitles = () => {
     .slice(0, 7);
 };
 
-const hasReliableTimes = (data = filteredByRange()) => data.some((item) => item.source !== "netflix-csv");
+const hasReliableTimes = (data = filteredByRange()) => data.some((item) => item.hasTime !== false);
 
 const getLateNightItems = () =>
   filteredByRange().filter((item) => {
-    if (item.source === "netflix-csv") {
+    if (item.hasTime === false) {
       return false;
     }
 
@@ -945,7 +970,7 @@ const renderHistory = () => {
             <span>${escapeHtml(item.type)} • ${escapeHtml(item.genre)}</span>
           </div>
           <div class="platform-badge" style="--badge-bg: ${platformColors[item.platform] || "#667085"}">${escapeHtml(item.platform)}</div>
-          <div class="history-meta">${date.toLocaleDateString(netflixDateLocale)} ${date.toLocaleTimeString(netflixDateLocale, { hour: "2-digit", minute: "2-digit" })}</div>
+          <div class="history-meta">${formatWatchedDate(item)}</div>
           <div class="history-meta">${formatHours(item.minutes)}${item.estimated ? "*" : ""}</div>
         </article>
       `;

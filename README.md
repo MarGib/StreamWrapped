@@ -37,6 +37,8 @@ Flow:
 
 Important limitation: Netflix viewing activity CSV exposes titles and watch dates. It does not provide exact watch duration per session, so StreamWrapped marks imported Netflix time as estimated when estimation is enabled.
 
+Netflix CSV entries are treated as date-only records. The UI must not invent a viewing hour for them; exact late-night analysis is only possible for sources that provide timestamps.
+
 The Netflix analytics view keeps large histories manageable with:
 
 - date filters for a single day or custom range
